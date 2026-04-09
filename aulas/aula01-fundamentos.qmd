@@ -295,7 +295,6 @@ flowchart TD
 
 ```{python}
 #| code-fold: true
-#| eval: false
 
 import pandas as pd
 import numpy as np

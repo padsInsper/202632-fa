@@ -258,7 +258,7 @@ Você é analista de risco com posições em PETR4, VALE3 e ITUB4. O gestor prec
 ## Na Prática: Ajustando GARCH com `arch` em Python
 
 ```{python}
-#| eval: false
+#| code-fold: true
 from arch import arch_model
 import yfinance as yf
 
@@ -289,7 +289,8 @@ for nome, modelo in modelos.items():
 
 # ── Previsão de volatilidade ──────────────────────────
 melhor = arch_model(retornos, vol='EGARCH', p=1, q=1, dist='t').fit(disp='off')
-previsao = melhor.forecast(horizon=10)
+# EGARCH requer simulação para horizonte > 1
+previsao = melhor.forecast(horizon=10, method='simulation', simulations=1000)
 print("\nVolatilidade prevista (σ diário, %) para os próximos 10 dias:")
 print(previsao.variance.iloc[-1].apply(lambda x: f"{x**0.5:.2f}%"))
 ```

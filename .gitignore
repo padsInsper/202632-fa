@@ -1,5 +1,4 @@
 _site/
-_freeze/
 .quarto/
 __pycache__/
 *.pyc
