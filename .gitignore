@@ -1,0 +1,22 @@
+_site/
+_freeze/
+.quarto/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+*.egg-info/
+_ref_previous/
+_ref_microbook/
+.venv/
+.claude/
+
+/.quarto/
+**/*.quarto_ipynb
+dinamicas/
+manual_marca/
+
+# Dados do professor (gabarito do trabalho intermediário)
+dados/serie_gabarito.csv
+dados/serie_completa.csv
+dados/preparar_serie.py

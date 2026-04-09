@@ -1,0 +1,310 @@
+---
+title: "Lab 4: Otimização de Portfólios"
+subtitle: "Da teoria à prática: montando e avaliando carteiras"
+execute:
+  eval: false
+---
+
+::: {.objetivos}
+#### Objetivos do Lab
+
+- [Aplicar]{.bloom-badge .bloom-aplicar} cálculo de retorno esperado e matriz de covariância
+- [Criar]{.bloom-badge .bloom-criar} a fronteira eficiente com otimização numérica
+- [Avaliar]{.bloom-badge .bloom-avaliar} performance de portfólios contra benchmarks
+:::
+
+## Setup
+
+```{python}
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+
+from scipy.optimize import minimize
+from scipy import stats
+
+import warnings
+warnings.filterwarnings('ignore')
+
+INSPER_RED = '#E50505'
+INSPER_TURQUESA = '#3ACC9F'
+INSPER_AMARELO = '#FFCC00'
+INSPER_ROXO = '#730D9F'
+INSPER_GRAY = '#5B5B5B'
+```
+
+## Parte 1: Dados e Retornos
+
+```{python}
+# Ativos para o portfólio
+ativos = ['PETR4.SA', 'VALE3.SA', 'ITUB4.SA', 'WEGE3.SA',
+          'ABEV3.SA', 'RENT3.SA', 'BBAS3.SA', 'SUZB3.SA']
+benchmark = '^BVSP'
+
+start_date = '2018-01-01'
+
+# Download
+todos = ativos + [benchmark]
+precos = yf.download(todos, start=start_date, auto_adjust=False)['Adj Close'].dropna()
+
+# Separar benchmark
+bench_precos = precos[benchmark]
+precos = precos[ativos]
+
+# Log-retornos diários
+retornos = np.log(precos / precos.shift(1)).dropna()
+ret_bench = np.log(bench_precos / bench_precos.shift(1)).dropna()
+
+# Retorno e risco anualizados
+ret_anual = retornos.mean() * 252
+risco_anual = retornos.std() * np.sqrt(252)
+
+# Tabela resumo
+resumo = pd.DataFrame({
+    'Retorno Anual (%)': ret_anual * 100,
+    'Risco Anual (%)': risco_anual * 100,
+    'Sharpe': ret_anual / risco_anual
+}).round(3)
+
+resumo.sort_values('Sharpe', ascending=False)
+```
+
+```{python}
+# Scatter retorno vs. risco
+fig = px.scatter(
+    resumo, x='Risco Anual (%)', y='Retorno Anual (%)',
+    text=resumo.index.str.replace('.SA', ''),
+    title='Retorno vs. Risco — Ativos Individuais',
+    template='plotly_white'
+)
+fig.update_traces(textposition='top center', marker=dict(size=12, color=INSPER_RED))
+fig.update_layout(font_family='Inter')
+fig.show()
+```
+
+## Parte 2: Matriz de Correlação e Covariância
+
+```{python}
+# Correlação
+corr = retornos.corr()
+
+fig = px.imshow(
+    corr,
+    text_auto='.2f',
+    color_continuous_scale=['#3ACC9F', '#FFFFFF', '#E50505'],
+    title='Matriz de Correlação',
+    template='plotly_white'
+)
+fig.update_layout(font_family='Inter')
+fig.show()
+```
+
+```{python}
+# Covariância anualizada
+cov_anual = retornos.cov() * 252
+```
+
+## Parte 3: Fronteira Eficiente
+
+```{python}
+n_ativos = len(ativos)
+mu = ret_anual.values
+sigma = cov_anual.values
+
+def portfolio_stats(weights, mu, sigma):
+    """Retorna retorno e risco de um portfólio"""
+    ret = weights @ mu
+    risk = np.sqrt(weights @ sigma @ weights)
+    return ret, risk
+
+def neg_sharpe(weights, mu, sigma, rf=0.10):
+    """Sharpe negativo (para minimização)"""
+    ret, risk = portfolio_stats(weights, mu, sigma)
+    return -(ret - rf) / risk
+
+def portfolio_variance(weights, sigma):
+    """Variância do portfólio (para minimização)"""
+    return weights @ sigma @ weights
+
+# Restrições
+constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]  # soma = 1
+bounds = [(0, 0.30)] * n_ativos  # máx 30% por ativo
+
+# Portfólio de mínima variância
+w0 = np.ones(n_ativos) / n_ativos
+res_minvar = minimize(portfolio_variance, w0, args=(sigma,),
+                       method='SLSQP', bounds=bounds, constraints=constraints)
+
+# Portfólio de máximo Sharpe
+res_sharpe = minimize(neg_sharpe, w0, args=(mu, sigma, 0.10),
+                       method='SLSQP', bounds=bounds, constraints=constraints)
+
+print("Portfólio Mínima Variância:")
+for ativo, peso in zip(ativos, res_minvar.x):
+    if peso > 0.01:
+        print(f"  {ativo}: {peso:.1%}")
+
+print(f"\nPortfólio Máximo Sharpe:")
+for ativo, peso in zip(ativos, res_sharpe.x):
+    if peso > 0.01:
+        print(f"  {ativo}: {peso:.1%}")
+```
+
+```{python}
+# Gerar fronteira eficiente
+n_portfolios = 100
+retornos_alvo = np.linspace(mu.min(), mu.max(), n_portfolios)
+riscos_fronteira = []
+
+for ret_alvo in retornos_alvo:
+    constraints_ef = [
+        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
+        {'type': 'eq', 'fun': lambda w, r=ret_alvo: w @ mu - r}
+    ]
+    res = minimize(portfolio_variance, w0, args=(sigma,),
+                    method='SLSQP', bounds=bounds, constraints=constraints_ef)
+    if res.success:
+        riscos_fronteira.append(np.sqrt(res.fun))
+    else:
+        riscos_fronteira.append(np.nan)
+
+# Portfólios aleatórios (para contexto visual)
+n_random = 5000
+ret_random, risk_random = [], []
+for _ in range(n_random):
+    w = np.random.dirichlet(np.ones(n_ativos))
+    ret, risk = portfolio_stats(w, mu, sigma)
+    ret_random.append(ret)
+    risk_random.append(risk)
+
+# Plot
+fig = go.Figure()
+
+# Random portfolios
+fig.add_trace(go.Scatter(x=np.array(risk_random)*100, y=np.array(ret_random)*100,
+                          mode='markers', marker=dict(size=2, color=INSPER_GRAY, opacity=0.3),
+                          name='Portfólios Aleatórios'))
+
+# Fronteira eficiente
+fig.add_trace(go.Scatter(x=np.array(riscos_fronteira)*100, y=retornos_alvo*100,
+                          mode='lines', line=dict(color=INSPER_RED, width=3),
+                          name='Fronteira Eficiente'))
+
+# Portfólios especiais
+r_mv, s_mv = portfolio_stats(res_minvar.x, mu, sigma)
+r_ms, s_ms = portfolio_stats(res_sharpe.x, mu, sigma)
+
+fig.add_trace(go.Scatter(x=[s_mv*100], y=[r_mv*100], mode='markers',
+                          marker=dict(size=15, color=INSPER_TURQUESA, symbol='star'),
+                          name='Mín. Variância'))
+fig.add_trace(go.Scatter(x=[s_ms*100], y=[r_ms*100], mode='markers',
+                          marker=dict(size=15, color=INSPER_AMARELO, symbol='star'),
+                          name='Máx. Sharpe'))
+
+# Ativos individuais
+fig.add_trace(go.Scatter(x=risco_anual.values*100, y=ret_anual.values*100,
+                          mode='markers+text', text=[a.replace('.SA','') for a in ativos],
+                          textposition='top center',
+                          marker=dict(size=10, color=INSPER_ROXO),
+                          name='Ativos Individuais'))
+
+fig.update_layout(
+    title='Fronteira Eficiente de Markowitz',
+    xaxis_title='Risco Anual (%)', yaxis_title='Retorno Anual (%)',
+    template='plotly_white', font_family='Inter',
+    legend=dict(yanchor='top', y=0.99, xanchor='left', x=0.01)
+)
+fig.show()
+```
+
+## Parte 4: Backtest
+
+```{python}
+# Split temporal: treino até 2023, teste 2024+
+split_date = '2024-01-01'
+ret_treino = retornos.loc[:split_date]
+ret_teste = retornos.loc[split_date:]
+
+# Otimizar no treino
+mu_train = ret_treino.mean().values * 252
+sigma_train = ret_treino.cov().values * 252
+
+res_bt = minimize(neg_sharpe, w0, args=(mu_train, sigma_train, 0.10),
+                   method='SLSQP', bounds=bounds, constraints=constraints)
+pesos_otimos = res_bt.x
+
+# Performance no teste
+ret_portfolio_teste = (ret_teste * pesos_otimos).sum(axis=1)
+ret_bench_teste = ret_bench.loc[split_date:]
+
+# Alinhamento
+idx_comum = ret_portfolio_teste.index.intersection(ret_bench_teste.index)
+ret_portfolio_teste = ret_portfolio_teste.loc[idx_comum]
+ret_bench_teste = ret_bench_teste.loc[idx_comum]
+
+# Retorno acumulado
+cum_portfolio = (1 + ret_portfolio_teste).cumprod()
+cum_bench = (1 + ret_bench_teste).cumprod()
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=cum_portfolio.index, y=cum_portfolio.values,
+                          mode='lines', name='Portfólio Ótimo',
+                          line=dict(color=INSPER_RED, width=2)))
+fig.add_trace(go.Scatter(x=cum_bench.index, y=cum_bench.values,
+                          mode='lines', name='Ibovespa',
+                          line=dict(color=INSPER_GRAY, width=2)))
+fig.update_layout(
+    title='Backtest: Portfólio Otimizado vs. Ibovespa',
+    template='plotly_white', font_family='Inter',
+    yaxis_title='Retorno Acumulado', hovermode='x unified'
+)
+fig.show()
+```
+
+```{python}
+# Métricas de performance
+def performance_metrics(returns, rf_daily=0.10/252):
+    """Calcula métricas de performance"""
+    ret_anual = returns.mean() * 252
+    vol_anual = returns.std() * np.sqrt(252)
+    sharpe = (ret_anual - 0.10) / vol_anual
+
+    # Max drawdown
+    cum = (1 + returns).cumprod()
+    peak = cum.cummax()
+    drawdown = (cum - peak) / peak
+    max_dd = drawdown.min()
+
+    return {
+        'Retorno Anual (%)': f"{ret_anual*100:.2f}",
+        'Volatilidade (%)': f"{vol_anual*100:.2f}",
+        'Sharpe': f"{sharpe:.3f}",
+        'Max Drawdown (%)': f"{max_dd*100:.2f}",
+    }
+
+metricas = pd.DataFrame({
+    'Portfólio': performance_metrics(ret_portfolio_teste),
+    'Ibovespa': performance_metrics(ret_bench_teste)
+})
+metricas
+```
+
+## Competição de Portfólios
+
+::: {.callout-important}
+## Dinâmica: Competição
+
+1. **Forme** duplas ou trios
+2. **Escolha** 5 a 10 ativos da B3
+3. **Otimize** o portfólio usando os dados até hoje
+4. **Simule** o retorno nos últimos 6 meses (backtest)
+5. **Apresente** em 5 min: quais ativos, por quê, qual performance
+
+**Critérios de avaliação**:
+- Sharpe ratio (40%)
+- Justificativa das escolhas (40%)
+- Qualidade do diagnóstico (20%)
+:::

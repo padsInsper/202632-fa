@@ -1,0 +1,114 @@
+---
+title: "Tópicos Avançados"
+subtitle: "Financial Analytics: PADS Insper 2026.2"
+author: "Programa Avançado de Data Science e Decisão"
+format:
+  revealjs:
+    theme: [default, ../assets/insper-theme.scss]
+    logo: ../assets/img/logo-insper-branco.png
+    footer: "Financial Analytics: Aula 7"
+    slide-number: true
+    transition: fade
+    width: 1280
+    height: 720
+    highlight-style: monokai
+    code-fold: true
+    smaller: true
+    scrollable: true
+---
+
+## Modelos VAR
+
+Quando **múltiplas séries se influenciam mutuamente**:
+
+$$\mathbf{y}_t = \mathbf{c} + \boldsymbol{\Phi}_1 \mathbf{y}_{t-1} + \cdots + \boldsymbol{\Phi}_p \mathbf{y}_{t-p} + \boldsymbol{\varepsilon}_t$$
+
+Exemplo: juros ↔ câmbio ↔ inflação
+
+Cada variável depende do **próprio passado** + **passado das outras**.
+
+## Causalidade de Granger
+
+> $X$ Granger-causa $Y$ se o passado de $X$ ajuda a prever $Y$ além do passado de $Y$ sozinho.
+
+::: {.callout-warning}
+**Granger-causalidade ≠ causalidade real**
+
+É precedência temporal, não causa-efeito. Sorvete não causa afogamentos!
+:::
+
+## Funções de Resposta ao Impulso
+
+*"Se a Selic subir 1% inesperadamente, qual o efeito no câmbio nos próximos 12 meses?"*
+
+A IRF mostra a **dinâmica** da propagação de choques entre variáveis.
+
+## Correlação vs. Cointegração
+
+| Conceito | O que mede | Propriedade |
+|----------|-----------|-------------|
+| **Correlação** | Co-movimento curto prazo | Pode ser espúria |
+| **Cointegração** | Equilíbrio longo prazo | Implica reversão à média |
+
+Duas séries I(1) **cointegradas**: divergem no curto prazo, mas **voltam ao equilíbrio**.
+
+$$y_t - \beta x_t \sim I(0)$$
+
+## Testes de Cointegração
+
+### Engle-Granger (2 variáveis)
+1. Regrida $y_t = \alpha + \beta x_t + e_t$
+2. Teste se $\hat{e}_t$ é estacionário (ADF)
+
+### Johansen (múltiplas variáveis)
+- Testa o **rank de cointegração**
+- Quantas relações de equilíbrio existem?
+
+## Pair Trading
+
+```{mermaid}
+flowchart LR
+    A["Seleção de Pares"] --> B["Calcular Spread"]
+    B --> C["Z-score"]
+    C --> D["Sinais"]
+    D --> E["Fechar Posição"]
+```
+
+| Sinal | Z-score | Ação |
+|-------|---------|------|
+| Long spread | $z < -2$ | Comprar Y, vender X |
+| Short spread | $z > +2$ | Vender Y, comprar X |
+| Saída | $|z| < 0.5$ | Fechar posições |
+
+## Riscos do Pair Trading
+
+1. **Quebra da cointegração** (fusão, regulação)
+2. **Reversão lenta** (custo de carregamento)
+3. **Risco de execução** (liquidez)
+4. **Risco de modelo** (in-sample ≠ out-of-sample)
+
+## IA em Finanças
+
+| Abordagem | Uso | Cuidados |
+|-----------|-----|----------|
+| LLMs | Sentimento, notícias | Não preveem preços |
+| XGBoost | Fatores, features | Overfitting |
+| LSTM | Séries complexas | Caixa-preta |
+| RL | Trading auto | Instável |
+
+::: {.callout-important}
+GARCH com 3 parâmetros frequentemente supera redes neurais com milhares para previsão de volatilidade.
+:::
+
+## Encerramento
+
+**O que aprendemos neste curso:**
+
+1. Séries temporais: decomposição, ARIMA, previsão
+2. Finanças: GARCH, VaR, CAPM, Markowitz
+3. Pensamento crítico > código
+4. Entender o **porquê** > previsão com 0.1% a mais
+
+::: {.callout-tip}
+Os fatos estilizados existem independentemente do modelo. Entender o fenômeno é mais importante que otimizar acurácia.
+:::
