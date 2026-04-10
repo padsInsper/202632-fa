@@ -61,6 +61,36 @@ $$\text{VaR}_\alpha = -(\mu + z_\alpha \cdot \sigma) \cdot W$$
 - O mais flexível (opções, não-linearidades)
 - **Problema**: computacionalmente custoso
 
+## Horizonte: Regra do $\sqrt{k}$
+
+Para retornos i.i.d., a variância escala linearmente, o desvio padrão com $\sqrt{k}$:
+
+$$\text{VaR}_\alpha(k \text{ dias}) = \sqrt{k} \cdot \text{VaR}_\alpha(1 \text{ dia})$$
+
+- VaR 1 dia = R\$ 100 mil $\Rightarrow$ VaR 10 dias $\approx$ R\$ 316 mil
+- **Não** é R\$ 1 milhão
+- Quebra se há autocorrelação ou heterocedasticidade forte
+
+## VaR de Portfólio: Correlação Importa
+
+$$\text{VaR}_P = \sqrt{\text{VaR}_A^2 + \text{VaR}_B^2 + 2\rho\, \text{VaR}_A \text{VaR}_B}$$
+
+| $\rho$ | VaR do portfólio |
+|--------|------------------|
+| $+1$ | $\text{VaR}_A + \text{VaR}_B$ (sem diversificação) |
+| $0$ | $\sqrt{\text{VaR}_A^2 + \text{VaR}_B^2}$ |
+| $-1$ | $|\text{VaR}_A - \text{VaR}_B|$ (hedge) |
+
+Portfólio $n$-dimensional: $\text{VaR}_P = z_\alpha \sqrt{\mathbf{w}^\top \Sigma \mathbf{w}} \cdot W$
+
+## Correção $t$-Student
+
+Como a $t$ tem variância $\nu/(\nu-2)$, o VaR paramétrico precisa de um ajuste:
+
+$$\text{VaR}_\alpha = -\left(\mu + t^*_\nu(1-\alpha) \cdot \sigma \cdot \sqrt{\tfrac{\nu-2}{\nu}}\right) \cdot W$$
+
+Esquecer o fator $\sqrt{(\nu-2)/\nu}$ leva a VaRs **superestimados**.
+
 ## Expected Shortfall (ES)
 
 $$\text{ES}_\alpha = E[L \mid L > \text{VaR}_\alpha]$$

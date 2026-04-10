@@ -24,9 +24,9 @@ Pense na diferença entre uma planilha de vendas por loja (cross-section) e vend
 ::: {.conceito-card}
 #### Definição Formal
 
-Uma série temporal é uma realização de um **processo estocástico** $\{Y_t\}_{t \in T}$, onde cada $Y_t$ é uma variável aleatória e $T$ é o conjunto de índices temporais. O que observamos (os dados) é apenas **uma trajetória** dentre infinitas possíveis desse processo.
+Formalmente, um processo estocástico é uma família indexada de variáveis aleatórias $\{Y_t\}_{t \in T}$, todas definidas sobre um mesmo espaço de probabilidade $(\Omega, \mathcal{F}, P)$. Cada $\omega \in \Omega$ determina uma trajetória inteira $t \mapsto Y_t(\omega)$ - uma "história possível" do processo. Uma série temporal observada é exatamente uma dessas trajetórias.
 
-Essa distinção é crucial: quando ajustamos um modelo, estamos tentando recuperar as propriedades do *processo* a partir de uma *única realização*.
+Quando ajustamos um modelo, tentamos recuperar propriedades do processo (média, covariância, distribuição) a partir de uma única trajetória. Isso só é possível sob hipóteses como estacionariedade e ergodicidade, que veremos adiante.
 :::
 
 ::: {.caso-negocio}

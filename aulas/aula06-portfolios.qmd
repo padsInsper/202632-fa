@@ -157,6 +157,21 @@ $$\underbrace{\sigma_i^2}_{\text{Risco total}} = \underbrace{\beta_i^2 \sigma_m^
 
 A implicação prática é poderosa: como o risco idiossincrático pode ser eliminado com diversificação, o mercado **não remunera** quem o carrega. Apenas o risco sistemático ($\beta$) é precificado. Um portfólio com 20–30 ações já elimina a maior parte do risco idiossincrático.
 
+### Beta de um portfólio
+
+Uma propriedade fundamental do $\beta$ é ser **linear nos pesos**. Para um portfólio com $n$ ativos e pesos $w_1, \ldots, w_n$:
+
+::: {.formula-highlight}
+[Beta de portfólio]{.formula-label}
+$$\beta_p = \sum_{i=1}^{n} w_i \, \beta_i$$
+:::
+
+A demonstração é imediata a partir da definição $\beta_i = \text{Cov}(R_i, R_m) / \text{Var}(R_m)$ e da linearidade da covariância. Isso tem **três implicações práticas** importantes:
+
+1. **Hedge de portfólio**: para neutralizar o risco de mercado de uma carteira com $\beta_p = 0{,}8$ usando um índice futuro com $\beta = 1$, basta vender a descoberto uma posição de tamanho $0{,}8 \times W$.
+2. **Alocação tática**: ajustar o $\beta$ do portfólio (por ex., de 0,9 para 1,1) é uma forma direta de aumentar/reduzir exposição ao mercado.
+3. **Atribuição de performance**: o $\beta$ agregado revela quanto do retorno vem de exposição ao mercado vs. seleção de ativos.
+
 ::: {.callout-important}
 ## Limitações do CAPM
 O CAPM assume: (1) investidores são racionais e avessos a risco, (2) mercados são eficientes, (3) existe um ativo livre de risco, (4) investidores podem emprestar/tomar emprestado à taxa $R_f$. Na prática, essas hipóteses são **aproximações**. Modelos multifatoriais estendem o CAPM para capturar anomalias que ele não explica.
@@ -539,6 +554,23 @@ Fundos de pensão brasileiros (como Previ, Petros, Funcef) gerem centenas de bil
 | **Treynor** | $\frac{R_p - R_f}{\beta_p}$ | Retorno por unidade de risco sistemático |
 | **Information Ratio** | $\frac{R_p - R_b}{\sigma(R_p - R_b)}$ | Excesso de retorno por tracking error |
 | **Max Drawdown** | $\max_t \frac{P_{\max} - P_t}{P_{\max}}$ | Maior queda acumulada do pico |
+
+### Sharpe como inclinação da Linha do Mercado de Capitais (CML)
+
+A SML (Security Market Line) liga $\beta$ a retorno esperado para **ativos individuais**. A **CML** (Capital Market Line) faz o mesmo para **portfólios eficientes** compostos pelo ativo livre de risco e pelo portfólio de mercado:
+
+::: {.formula-highlight}
+[Capital Market Line]{.formula-label}
+$$E[R_p] = R_f + \underbrace{\frac{E[R_m] - R_f}{\sigma_m}}_{\text{Sharpe do mercado}} \cdot \sigma_p$$
+:::
+
+A inclinação da CML é **exatamente** o Sharpe ratio do portfólio de mercado. Isso dá ao Sharpe uma interpretação geométrica forte:
+
+- O Sharpe de qualquer portfólio é a **inclinação da reta** que liga $R_f$ a esse portfólio no plano $(\sigma, E[R])$
+- O **portfólio tangente** à fronteira eficiente a partir de $R_f$ é o que **maximiza** o Sharpe ratio — é ele que define a CML
+- Todos os portfólios sobre a CML dominam qualquer portfólio abaixo dela, ou seja, oferecem mais retorno para o mesmo risco
+
+Essa é a razão profunda pela qual o Sharpe é o indicador de performance mais usado: ele identifica a reta mais inclinada no plano risco-retorno, e qualquer combinação linear entre $R_f$ e o portfólio tangente é eficiente.
 
 ### Sharpe vs. Sortino
 

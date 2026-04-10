@@ -34,18 +34,21 @@ Seu notebook deve conter **obrigatoriamente**:
 ### 1. Análise Exploratória (20%)
 
 - Gráfico da série temporal
-- Decomposição (clássica ou STL)
+- Decomposição (clássica ou STL) — explique os componentes considerando o aspecto da série
 - ACF e PACF da série original e diferenciada
-- Testes de estacionariedade (ADF e KPSS)
-- Identificação de sazonalidade, tendência e outliers
+- Testes de estacionariedade (ADF e KPSS) com **conclusão explícita sobre tendência estocástica**
+- Identificação de sazonalidade (e sua periodicidade), tendência e outliers
 - Discussão: o que os dados "dizem"?
 
 ### 2. Modelagem (30%)
 
 - Pelo menos **3 modelos candidatos** (ex: ARIMA, SARIMA, ETS, Prophet)
-- Justificativa para a escolha de cada modelo
+- Justificativa para a escolha de cada modelo — critérios de informação e/ou etapa de
+  identificação da abordagem Box-Jenkins
 - Uso de `statsforecast.AutoARIMA` ou identificação manual via Box-Jenkins
 - Parâmetros estimados e sua interpretação
+- **Diagnóstico residual**: verificar se os resíduos do modelo ARIMA/SARIMA escolhido
+  se comportam como ruído branco (ACF dos resíduos, teste de Ljung-Box)
 
 ### 3. Validação Cruzada Temporal (25%)
 
@@ -97,3 +100,32 @@ As previsões serão avaliadas contra os dados reais ocultos usando **MASE**. Os
 | 3º lugar | +0.5 ponto |
 
 A métrica de ranking é o **MASE** (Mean Absolute Scaled Error) — ela permite comparação justa independente da escala da série.
+
+## Desafio adicional: série de periodicidade desconhecida (2 pontos extras)
+
+::: {.callout-important}
+## Base `dados_amostra.csv`
+Será disponibilizada no repositório do curso uma base contendo uma segunda série temporal
+cuja **periodicidade não é informada** (pode ser diária, horária, semanal etc.).
+As **18 observações mais recentes foram ocultadas** propositalmente para avaliar a
+qualidade da sua previsão.
+:::
+
+Seu objetivo:
+
+a. Ajustar modelos de séries temporais apropriados (pode escolher modelos vistos em sala
+   e outros não vistos — DARTS, NBEATS, XGBoost, o que preferir).
+b. Escolher o melhor modelo via **backtest** e métricas de validação apropriadas.
+c. Usar o modelo para prever as próximas **18 observações**.
+d. Exportar as previsões em `previsao_amostra.csv` e submeter junto com a entrega principal.
+
+Essa questão será avaliada pelo **RMSE** sobre as 18 observações ocultadas; os grupos
+com melhores predições recebem bônus adicional na nota do trabalho.
+
+## Referências e materiais de apoio
+
+- Notebooks originais da Profa. Paloma disponíveis em
+  [Materiais Complementares](../complementar/index.qmd), em especial
+  `aula03-darts-forecasting.ipynb` para alternativas ao SARIMA/Prophet.
+- Livro-base: Hyndman & Athanasopoulos, *Forecasting: Principles and Practice* (3ª ed.,
+  FPP3).

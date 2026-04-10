@@ -91,6 +91,44 @@ O GARCH padrão não captura isso ($\varepsilon^2$ trata + e - igualmente).
 | **EGARCH** | Log da variância | $\gamma < 0$ |
 | **GJR-GARCH** | Indicadora $I(\varepsilon < 0)$ | $\gamma > 0$ |
 
+## IGARCH e RiskMetrics (EWMA)
+
+Quando $\alpha + \beta = 1$, reparametrize $\beta = \lambda$, $\omega = 0$:
+
+$$h_t = \lambda\, h_{t-1} + (1-\lambda)\, r_{t-1}^2$$
+
+É exatamente o **RiskMetrics™** (J.P. Morgan, 1996):
+
+- $\lambda = 0{,}94$ para dados diários
+- Sem estimação — parâmetro fixo
+- Baseline universal em VaR regulatório
+
+## Volatilidade Estocástica (SV)
+
+No GARCH, $h_t$ é **determinística** dado o passado. No SV, a volatilidade tem **seu próprio choque**:
+
+$$r_t = \exp(h_t/2)\, z_t$$
+$$h_t = \mu + \phi(h_{t-1} - \mu) + \sigma_\eta\, \eta_t$$
+
+**Duas fontes de ruído**: $z_t$ (retorno) e $\eta_t$ (volatilidade)
+
+- Captura melhor certos saltos de volatilidade
+- Base para Heston e modelos de precificação de opções
+- Estimação cara (MCMC, filtros de partículas)
+
+## Diagnóstico: Toolkit Mínimo
+
+Resíduos padronizados $\hat z_t = \hat\varepsilon_t / \sqrt{\hat h_t}$ devem ser i.i.d.
+
+| Teste | O que checa |
+|-------|-------------|
+| **ARCH-LM** | Volatilidade residual em $\hat z_t^2$ |
+| **Ljung-Box** em $\hat z_t$ | Autocorrelação no nível |
+| **Ljung-Box** em $\hat z_t^2$ | Clusters remanescentes |
+| **Shapiro-Wilk** | Normalidade dos $\hat z_t$ |
+
+→ Se ARCH-LM rejeita, o GARCH **não capturou** a volatilidade
+
 ## Distribuição dos Erros
 
 Retornos têm **caudas mais pesadas** que a normal:

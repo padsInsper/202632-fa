@@ -37,6 +37,36 @@ $$\mathbf{y}_t = \mathbf{c} + \boldsymbol{\Phi}_1 \mathbf{y}_{t-1} + \boldsymbol
 
 **Escolha da ordem $p$**: usa-se critérios de informação (AIC, BIC) aplicados ao sistema como um todo.
 
+### Forma reduzida vs. forma estrutural
+
+A equação acima é a **forma reduzida** do VAR: cada variável depende apenas do **passado** das variáveis. As relações **contemporâneas** entre as variáveis ficam escondidas dentro da matriz de covariância $\Sigma = \text{Cov}(\boldsymbol{\varepsilon}_t)$: se $\sigma_{12} \neq 0$, há correlação entre os choques de $y_1$ e $y_2$ **no mesmo instante**.
+
+Para separar essas relações contemporâneas usamos a **decomposição de Cholesky** de $\Sigma$:
+
+::: {.formula-highlight}
+[Decomposição de Cholesky]{.formula-label}
+$$\Sigma = L G L^\top$$
+:::
+
+onde $L$ é **triangular inferior** com 1's na diagonal e $G$ é diagonal. Pré-multiplicando o VAR por $L^{-1}$ obtemos a **forma estrutural**:
+
+$$L^{-1} \mathbf{y}_t = L^{-1} \mathbf{c} + L^{-1} \boldsymbol{\Phi}_1 \mathbf{y}_{t-1} + \cdots + \mathbf{b}_t$$
+
+onde $\mathbf{b}_t = L^{-1} \boldsymbol{\varepsilon}_t$ tem covariância **diagonal**. Agora o sistema expõe relações contemporâneas: a segunda equação, por exemplo, passa a conter $y_{1,t}$ (e não apenas $y_{1,t-1}$).
+
+::: {.callout-note}
+## Por que isso importa?
+A **ordem** das variáveis no vetor $\mathbf{y}_t$ importa na Cholesky: a primeira variável afeta todas as demais contemporaneamente, mas não é afetada por elas. Essa escolha embute uma **hipótese causal** — na prática, ordena-se das variáveis "mais exógenas" (ex.: taxa de juros) para as "mais endógenas" (ex.: inflação). A Cholesky é a base da interpretação estrutural das IRFs.
+:::
+
+### Regressão espúria: o perigo das séries I(1)
+
+Quando duas séries são **I(1)** (integradas de ordem 1) e **não-cointegradas**, rodar uma regressão linear entre elas produz, tipicamente, $R^2$ alto, $t$-estatísticas enormes e resíduos fortemente autocorrelacionados — tudo parece ótimo, mas **a relação é espúria**. Esse é o problema clássico de Granger e Newbold (1974): com duas caminhadas aleatórias independentes, a regressão "encontra" relacionamentos inexistentes.
+
+Tyler Vigen mantém um catálogo divertido dessas correlações espúrias em [tylervigen.com/spurious-correlations](https://www.tylervigen.com/spurious-correlations): número de filmes de Nicolas Cage × afogamentos em piscinas, consumo per capita de queijo × mortes por enrosco em lençóis. Todas têm $r > 0{,}9$ — e nenhuma faz sentido.
+
+A regra operacional é simples: **antes de rodar uma regressão entre séries de preços**, teste raiz unitária (ADF) em ambas. Se forem I(1), use **primeiras diferenças** (retornos) ou teste **cointegração**.
+
 ### Causalidade de Granger
 
 ::: {.formula-highlight}
@@ -200,6 +230,29 @@ O teste ADF nos resíduos usa **valores críticos especiais** (tabelas de Engle-
 
 Mais robusto que Engle-Granger quando há **mais de 2 variáveis**. Testa o **rank de cointegração** — quantas relações de equilíbrio independentes existem entre $N$ variáveis. Se o rank é $r$, existem $r$ vetores de cointegração e $N - r$ tendências estocásticas comuns.
 
+### Modelo de Correção de Erros (VECM)
+
+Quando duas (ou mais) séries são cointegradas, o modelo "correto" **não é** um VAR nas diferenças nem nos níveis: é um **VECM** (Vector Error Correction Model), que combina as duas coisas. Para o caso bivariado:
+
+::: {.formula-highlight}
+[VECM para $P_{1t}, P_{2t}$ cointegrados]{.formula-label}
+$$\Delta P_{1,t} = \alpha_1 \underbrace{(P_{1,t-1} - \beta P_{2,t-1})}_{\text{termo de correção de erro}} + a_{11} \Delta P_{1,t-1} + a_{12} \Delta P_{2,t-1} + \varepsilon_{1,t}$$
+$$\Delta P_{2,t} = \alpha_2 (P_{1,t-1} - \beta P_{2,t-1}) + a_{21} \Delta P_{1,t-1} + a_{22} \Delta P_{2,t-1} + \varepsilon_{2,t}$$
+:::
+
+Em forma matricial, escrevendo $\Delta \mathbf{P}_t = (\Delta P_{1,t}, \Delta P_{2,t})^\top$, $\boldsymbol\alpha = (\alpha_1, \alpha_2)^\top$, $\boldsymbol\beta = (1, -\beta)^\top$:
+
+$$\Delta \mathbf{P}_t = \boldsymbol\alpha\, \boldsymbol\beta^\top \mathbf{P}_{t-1} + A\, \Delta \mathbf{P}_{t-1} + \boldsymbol{\varepsilon}_t$$
+
+- $\boldsymbol\beta$ é o **vetor de cointegração** — define a relação de equilíbrio de longo prazo
+- $\boldsymbol\alpha$ é o **vetor de velocidades de ajustamento** — com que rapidez cada série volta ao equilíbrio quando há desvio
+- $A$ contém a dinâmica de curto prazo nas diferenças
+
+::: {.conceito-card}
+#### Intuição do termo de correção
+Quando $P_{1,t-1} - \beta P_{2,t-1} > 0$ (o preço 1 está "acima" do equilíbrio), $\alpha_1 < 0$ faz $P_1$ cair no período seguinte — puxando o spread de volta ao equilíbrio. É literalmente um **termo de restauração** como o de uma mola.
+:::
+
 ## Pair Trading
 
 ### A estratégia
@@ -217,6 +270,27 @@ flowchart LR
     style C fill:#FFCC00,color:#000
     style E fill:#3ACC9F,color:#fff
 ```
+
+### Engle-Granger em dois passos e o vetor de pesos do spread
+
+A estratégia formal de pair trading usa a receita de **Engle-Granger em dois passos**:
+
+1. Rodar a regressão $Y_t = \mu + \theta X_t + z_t$ por OLS, obtendo $\hat\theta$
+2. Testar se $\hat z_t$ é estacionário (ADF). Se sim, $Y$ e $X$ são cointegrados com vetor $\boldsymbol\beta = (1, -\hat\theta)^\top$
+
+O **vetor de pesos** da posição sintética é exatamente esse vetor de cointegração:
+
+::: {.formula-highlight}
+[Pesos do spread]{.formula-label}
+$$\mathbf{w} = \begin{pmatrix} 1 \\ -\hat\theta \end{pmatrix} \quad \Longrightarrow \quad s_t = \mathbf{w}^\top \begin{pmatrix} Y_t \\ X_t \end{pmatrix} = Y_t - \hat\theta X_t$$
+:::
+
+Operacionalmente: para cada **1 unidade long em $Y$**, tome uma posição **short de $\hat\theta$ unidades em $X$**. Esse é o tamanho correto do hedge — qualquer desvio dele deixa exposição residual ao risco de nível.
+
+::: {.callout-warning}
+## $\hat\theta$ não é simétrico
+Se você trocar os papéis de $Y$ e $X$ na regressão, o novo coeficiente **não será** $1/\hat\theta$. Isso quebra a intuição estatística mas é uma consequência do OLS minimizar erro vertical. Alternativas: regressão TLS (Total Least Squares) ou estimação conjunta via Johansen, que trata as variáveis simetricamente.
+:::
 
 ### Regras de Trading
 

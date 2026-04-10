@@ -152,6 +152,23 @@ $$\text{VaR}_\alpha = -(\mu + z_\alpha \cdot \sigma) \cdot W$$
 
 onde $z_\alpha$ é o quantil da distribuição normal ($z_{0.95} = -1.645$, $z_{0.99} = -2.326$) e $W$ é o valor do portfólio.
 
+::: {.callout-note}
+## Posição comprada vs. posição vendida
+A fórmula acima vale para uma **posição comprada** (long): você perde se o ativo cai, e o VaR usa a **cauda esquerda** da distribuição de retornos. Numa **posição vendida** (short), a lógica inverte — você perde se o ativo sobe, e o VaR usa a **cauda direita**:
+
+$$\text{VaR}_\alpha^{\text{short}} = (\mu + z_{1-\alpha} \cdot \sigma) \cdot W$$
+
+Para uma normal simétrica as magnitudes são iguais; para distribuições assimétricas (skewed-$t$), os dois lados precisam ser calculados separadamente.
+:::
+
+### Conexão com a Aula 4: RiskMetrics como VaR paramétrico
+
+O RiskMetrics™ (visto na Aula 4) é exatamente um VaR paramétrico com $\mu = 0$, distribuição normal e $\sigma_t$ estimado por IGARCH/EWMA:
+
+$$\text{VaR}_{\alpha,t}^{\text{RM}} = -z_\alpha \cdot \sqrt{h_t}, \qquad h_t = \lambda h_{t-1} + (1-\lambda) r_{t-1}^2$$
+
+É por isso que o RiskMetrics virou o baseline regulatório: é um VaR paramétrico com uma recursão simples de volatilidade e zero parâmetros a estimar.
+
 **Hipóteses**: retornos normais (ou t), volatilidade constante (ou estimada por GARCH).
 
 **Ponto forte**: rápido, analítico, fácil de implementar.
@@ -365,6 +382,69 @@ viewof dist_conf = Inputs.range([0.90, 0.99], {
 Na dúvida, **use t de Student**. É sempre mais conservador que a normal, e o custo de superestimar o risco (manter um pouco mais de capital) é muito menor que o custo de subestimá-lo (perdas não cobertas). A maioria das mesas de risco usa t com $\nu$ entre 4 e 8.
 :::
 
+## Horizonte Temporal: A Regra do $\sqrt{k}$
+
+Até aqui calculamos o VaR de **1 dia**. Como estimar o VaR para um horizonte de $k$ dias a partir do VaR diário?
+
+Se os retornos diários forem i.i.d. com variância $\sigma^2$, a variância do retorno acumulado em $k$ dias é $k\sigma^2$ (porque variâncias somam para variáveis independentes). Logo, o desvio padrão escala com $\sqrt{k}$:
+
+::: {.formula-highlight}
+[Regra do $\sqrt{k}$]{.formula-label}
+$$\text{VaR}_\alpha(k\text{ dias}) = \sqrt{k} \cdot \text{VaR}_\alpha(1\text{ dia})$$
+:::
+
+**Exemplo**: se o VaR diário é R\$ 100 mil, o VaR 10 dias (horizonte regulatório de Basileia) é $\sqrt{10} \cdot 100 \approx R\$ 316$ mil — **não** 10 × 100 = R\$ 1 milhão.
+
+::: {.callout-caution}
+## Atenção às hipóteses
+A regra $\sqrt{k}$ exige **retornos i.i.d.** e é quase sempre usada como aproximação. Ela **quebra** quando:
+- Há **autocorrelação** nos retornos (raro em ações, comum em títulos)
+- A **volatilidade é heterocedástica** (GARCH) e o horizonte é longo o suficiente para a volatilidade reverter à média
+- Há **efeitos de iliquidez** que aparecem apenas em horizontes longos
+
+Para GARCH, a fórmula correta usa a previsão multi-passo de $h_t$; $\sqrt{k}$ tende a **superestimar** o VaR quando a volatilidade atual está acima da média de longo prazo, e a **subestimar** quando está abaixo.
+:::
+
+## VaR de Portfólio: O Papel da Correlação
+
+Para um portfólio com dois ativos $A$ e $B$ com pesos $w_A, w_B$, a variância é
+
+$$\sigma_P^2 = w_A^2 \sigma_A^2 + w_B^2 \sigma_B^2 + 2 w_A w_B \rho_{AB} \sigma_A \sigma_B,$$
+
+e o VaR paramétrico do portfólio torna-se uma função direta dessa variância. Uma forma prática, quando os VaRs individuais já foram calculados ($\text{VaR}_i = -z_\alpha \sigma_i W_i$), é:
+
+::: {.formula-highlight}
+[VaR de portfólio com dois ativos]{.formula-label}
+$$\text{VaR}_P = \sqrt{\text{VaR}_A^2 + \text{VaR}_B^2 + 2 \rho_{AB}\, \text{VaR}_A \text{VaR}_B}$$
+:::
+
+Três casos limites:
+
+| Correlação | VaR do portfólio | Interpretação |
+|------------|------------------|---------------|
+| $\rho = +1$ | $\text{VaR}_A + \text{VaR}_B$ | **Nenhuma** diversificação: os ativos se movem juntos |
+| $\rho = 0$ | $\sqrt{\text{VaR}_A^2 + \text{VaR}_B^2}$ | Diversificação "clássica" |
+| $\rho = -1$ | $\lvert \text{VaR}_A - \text{VaR}_B \rvert$ | Diversificação **máxima**: hedge quase perfeito |
+
+::: {.conceito-card}
+#### Benefício de diversificação
+$$\text{Benefício} = (\text{VaR}_A + \text{VaR}_B) - \text{VaR}_P$$
+Para $\rho < 1$, o benefício é **positivo** — a soma dos VaRs individuais superestima o risco do portfólio. Em portfólios de $n$ ativos, a fórmula se generaliza via a matriz de covariância:
+
+$$\text{VaR}_P = z_\alpha \sqrt{\mathbf{w}^\top \Sigma \mathbf{w}} \cdot W$$
+:::
+
+## Correção para Caudas Pesadas: VaR com $t$-Student
+
+Quando se usa a distribuição $t$-Student com $\nu$ graus de liberdade, é importante lembrar que a variância da $t$ padrão **não é 1**, mas sim $\nu/(\nu-2)$. Para manter consistência com $\sigma$ estimado em unidades "normais", o VaR paramétrico com $t$ é
+
+::: {.formula-highlight}
+[VaR paramétrico com $t$-Student (variância reescalada)]{.formula-label}
+$$\text{VaR}_\alpha = -\left( \mu + t^*_\nu(1-\alpha) \cdot \sigma \cdot \sqrt{\frac{\nu-2}{\nu}} \right) \cdot W$$
+:::
+
+onde $t^*_\nu(1-\alpha)$ é o quantil da $t$-Student padrão. O fator $\sqrt{(\nu-2)/\nu}$ **corrige** a escala para que $\sigma$ continue representando o desvio padrão amostral. Esquecer essa correção é uma fonte comum de erro de implementação — e leva a VaRs sistematicamente **superestimados**.
+
 ## Expected Shortfall (CVaR)
 
 ### Limitação fundamental do VaR
@@ -453,6 +533,20 @@ Esperado: $500 \times 0.01 = 5$ violações. Observado: 15, ou seja, **3x mais**
 ## Questão 5: Um portfólio com 2 ativos tem VaR individual de R\$ 50 mil cada. O VaR do portfólio é necessariamente R\$ 100 mil?
 
 **Não!** Se os ativos não forem perfeitamente correlacionados ($\rho < 1$), o VaR do portfólio será **menor** que a soma dos VaR individuais — este é o efeito da **diversificação**. Apenas se $\rho = 1$ (correlação perfeita) o VaR do portfólio será exatamente R\$ 100 mil. Na prática, a diversificação reduz o risco. Note, porém, que esta propriedade nem sempre vale para o VaR (ele não é subaditivo) — um caso raro, mas possível, onde VaR(A+B) > VaR(A) + VaR(B). Esse é um dos motivos pelos quais o ES (que é subaditivo) é preferido.
+:::
+
+::: {.callout-caution collapse="true"}
+## Questão 6: O VaR 1 dia de um portfólio é R\$ 80 mil. Qual o VaR 10 dias aproximado?
+
+Pela regra do $\sqrt{k}$ (válida se os retornos forem i.i.d.): $\text{VaR}(10) = \sqrt{10} \cdot 80{,}000 \approx R\$ 253{,}000$. **Não** é 10 × 80 mil = R\$ 800 mil — esse seria o caso se a variância escalasse linearmente, o que só aconteceria com correlação perfeita entre dias. A intuição: perdas ruins em um dia tendem a ser compensadas por outros dias, de modo que o desvio padrão cresce com $\sqrt{k}$, não com $k$. Atenção: a regra falha se há autocorrelação nos retornos, clusters de volatilidade significativos ou horizonte muito longo.
+:::
+
+::: {.callout-caution collapse="true"}
+## Questão 7: Dois ativos têm VaR 95% individual de R\$ 60 mil e R\$ 40 mil, com correlação $\rho = 0{,}3$. Qual o VaR do portfólio?
+
+$$\text{VaR}_P = \sqrt{60^2 + 40^2 + 2 \cdot 0{,}3 \cdot 60 \cdot 40} = \sqrt{3600 + 1600 + 1440} = \sqrt{6640} \approx R\$ 81{,}5 \text{ mil}$$
+
+Comparado à soma bruta (R\$ 100 mil), há um **benefício de diversificação** de ~R\$ 18,5 mil. Se a correlação fosse 1, o VaR seria exatamente R\$ 100 mil; se fosse 0, seria $\sqrt{60^2 + 40^2} \approx R\$ 72{,}1$ mil; se fosse −1, seria apenas R\$ 20 mil. A correlação é o principal driver do benefício de diversificação — e mede o quanto os ativos "se movem juntos" em termos lineares.
 :::
 
 ## Para Saber Mais

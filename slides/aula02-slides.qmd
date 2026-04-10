@@ -48,6 +48,18 @@ $$\underbrace{\phi(B)}_{\text{AR}} \underbrace{(1-B)^d}_{\text{I}} y_t = c + \un
 | $d$ | Diferenciações (0, 1 ou 2) |
 | $q$ | Ordem de média móvel (quantos lags de $\varepsilon$) |
 
+## Polinômios e Raízes
+
+Operador de defasagem: $L Y_t = Y_{t-1}$.
+
+$$\Phi(L) = 1 - \phi_1 L - \cdots - \phi_p L^p$$
+
+**Estacionariedade do AR($p$)**: todas as raízes de $\Phi(z) = 0$ com $|z| > 1$ (fora do círculo unitário).
+
+- AR(1): $|\phi_1| < 1$
+- Raiz em $z = 1$ $\Rightarrow$ **raiz unitária** $\Rightarrow$ não-estacionário
+- Teste ADF = teste de hipótese sobre raiz em $z=1$
+
 ## SARIMA: Adicionando Sazonalidade
 
 $$\text{SARIMA}(p,d,q)(P,D,Q)_m$$

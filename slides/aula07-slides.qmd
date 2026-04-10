@@ -27,6 +27,24 @@ Exemplo: juros ↔ câmbio ↔ inflação
 
 Cada variável depende do **próprio passado** + **passado das outras**.
 
+## Forma Reduzida vs. Estrutural
+
+VAR na forma reduzida **esconde** relações contemporâneas na matriz $\Sigma = \text{Cov}(\boldsymbol{\varepsilon}_t)$.
+
+**Decomposição de Cholesky**: $\Sigma = L G L^\top$ com $L$ triangular inferior.
+
+Pré-multiplicando por $L^{-1}$ obtemos a **forma estrutural** — $y_{2,t}$ passa a depender contemporaneamente de $y_{1,t}$.
+
+A **ordem** das variáveis importa: ordene da mais exógena para a mais endógena.
+
+## Regressão Espúria
+
+Duas séries I(1) independentes → regressão produz $R^2$ alto e $t$-estatísticas enormes. Tudo **falso**.
+
+[tylervigen.com/spurious-correlations](https://www.tylervigen.com/spurious-correlations): filmes de Nicolas Cage × afogamentos, queijo × enrosco em lençóis.
+
+**Regra**: teste ADF antes. Se I(1), use diferenças ou teste cointegração.
+
 ## Causalidade de Granger
 
 > $X$ Granger-causa $Y$ se o passado de $X$ ajuda a prever $Y$ além do passado de $Y$ sozinho.
@@ -63,6 +81,29 @@ $$y_t - \beta x_t \sim I(0)$$
 ### Johansen (múltiplas variáveis)
 - Testa o **rank de cointegração**
 - Quantas relações de equilíbrio existem?
+
+## VECM: Modelo de Correção de Erros
+
+Séries cointegradas $\Rightarrow$ use **VECM**, não VAR:
+
+$$\Delta \mathbf{P}_t = \boldsymbol\alpha\, \boldsymbol\beta^\top \mathbf{P}_{t-1} + A\, \Delta \mathbf{P}_{t-1} + \boldsymbol{\varepsilon}_t$$
+
+- $\boldsymbol\beta = (1, -\beta)^\top$: **vetor de cointegração** (equilíbrio de longo prazo)
+- $\boldsymbol\alpha$: **velocidades de ajustamento** (mola que puxa para o equilíbrio)
+- $A$: dinâmica de curto prazo
+
+Quando o spread sai do equilíbrio, o termo $\boldsymbol\alpha\, \boldsymbol\beta^\top \mathbf{P}_{t-1}$ força o retorno.
+
+## Pair Trading: Engle-Granger em 2 passos
+
+1. Regredir $Y_t = \mu + \theta X_t + z_t$ por OLS
+2. ADF em $\hat z_t$: se estacionário, cointegrados
+
+**Vetor de pesos do spread**:
+
+$$\mathbf{w} = (1, -\hat\theta)^\top, \qquad s_t = Y_t - \hat\theta X_t$$
+
+Para cada **1 long em $Y$**, **$\hat\theta$ short em $X$** — esse é o hedge correto.
 
 ## Pair Trading
 

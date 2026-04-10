@@ -339,6 +339,47 @@ $$\underbrace{\phi(B)}_{\text{AR}} \underbrace{\Phi(B^s)}_{\text{AR sazonal}} \u
 | Não-sazonal $(p,d,q)$ | Dependência entre períodos consecutivos | "Ontem afeta hoje" |
 | Sazonal $(P,D,Q)_s$ | Dependência entre mesmos períodos em ciclos diferentes | "Janeiro passado afeta janeiro deste ano" |
 
+## Polinômios de Defasagem e Raízes Características
+
+Acima já usamos o operador de defasagem $B$ (também denotado $L$ em muitos textos) na forma compacta do ARIMA. Essa notação é mais do que um atalho: ela permite caracterizar **estacionariedade** geometricamente, via as raízes dos polinômios AR e MA. Recapitulando,
+
+$$L Y_t = Y_{t-1}, \qquad L^k Y_t = Y_{t-k}$$
+
+e definimos dois **polinômios de defasagem**:
+
+::: {.formula-highlight}
+[Polinômios AR e MA]{.formula-label}
+$$\Phi(L) = 1 - \phi_1 L - \phi_2 L^2 - \cdots - \phi_p L^p$$
+$$\Theta(L) = 1 + \theta_1 L + \theta_2 L^2 + \cdots + \theta_q L^q$$
+:::
+
+Com essa notação, um **ARMA($p,q$)** escreve-se como
+
+$$\Phi(L)\, Y_t = c + \Theta(L)\, \varepsilon_t,$$
+
+e um **ARIMA($p,d,q$)** fica simplesmente
+
+$$\Phi(L)\, (1-L)^d\, Y_t = c + \Theta(L)\, \varepsilon_t,$$
+
+onde $(1-L)$ é o operador de diferenciação: $(1-L) Y_t = Y_t - Y_{t-1} = \Delta Y_t$.
+
+### Condição de estacionariedade via raízes
+
+A grande vantagem dessa notação é que a **estacionariedade** do processo AR fica caracterizada pelas raízes do polinômio característico:
+
+::: {.conceito-card}
+#### Condição de estacionariedade
+Um AR($p$) é estacionário se, e somente se, **todas as raízes** de $\Phi(z) = 0$ (vistas como equação em $z \in \mathbb{C}$) estão **fora do círculo unitário**, isto é, $|z| > 1$.
+:::
+
+**Casos concretos**:
+
+- **AR(1)**: $\Phi(z) = 1 - \phi_1 z$; raiz em $z = 1/\phi_1$. Fora do círculo unitário ⟺ $|\phi_1| < 1$.
+- **AR(2)**: $\Phi(z) = 1 - \phi_1 z - \phi_2 z^2$; as duas raízes devem ter módulo $> 1$, o que equivale a $\phi_1 + \phi_2 < 1$, $\phi_2 - \phi_1 < 1$ e $|\phi_2| < 1$ (as mesmas condições usadas no simulador acima).
+- **Raiz unitária**: quando $\Phi(1) = 0$ (uma raiz exatamente em $z = 1$), o processo tem **raiz unitária** e é **não-estacionário** — é o caso da random walk e a motivação para o operador $(1-L)$.
+
+O teste ADF, que usaremos para determinar $d$, é literalmente um teste de hipótese sobre a existência de uma raiz em $z = 1$.
+
 ## Procedimento Box-Jenkins
 
 O método Box-Jenkins é o procedimento sistemático para modelagem ARIMA:
@@ -373,6 +414,45 @@ Os parâmetros são estimados por **máxima verossimilhança** (MLE). Compare mo
 | **AICc** | $AIC + \frac{2k(k+1)}{n-k-1}$ | Correção para amostras pequenas — **use este** |
 | **BIC** | $-2\log L + k\log n$ | Penaliza mais complexidade |
 
+#### Quando é legítimo comparar modelos por esses critérios?
+
+Todos os critérios acima dependem da **log-verossimilhança** $\log L$ avaliada sobre o **mesmo conjunto de dados**. Isso define de forma estrita quando a comparação faz sentido — e quando não faz.
+
+::: {.callout-important}
+## Regra de ouro
+Você só pode comparar dois modelos por AIC/AICc/BIC se **a variável resposta for exatamente a mesma** — mesmas observações, mesma escala, mesma transformação. Trocar o **modelo** é permitido; trocar os **dados** não é.
+:::
+
+**❌ Situações em que a comparação NÃO vale**
+
+- Comparar um ARIMA(1,0,0) ajustado em $Y_t$ com um ARIMA(1,1,0) ajustado em $\Delta Y_t$: as séries têm **tamanhos e escalas diferentes**, e a verossimilhança de cada modelo é computada sobre objetos distintos. Entre modelos com diferentes valores de $d$, o AIC **não é comparável**. O caminho correto é fixar $d$ pelos testes de raiz unitária e só depois comparar $(p,q)$ via AIC.
+- Comparar um modelo em $Y_t$ com outro em $\log Y_t$: o jacobiano da transformação muda a verossimilhança. Para comparar, é preciso corrigir a log-verossimilhança pelo jacobiano.
+- Comparar modelos ajustados em **amostras diferentes** (janelas temporais distintas, subconjuntos filtrados de formas diferentes).
+
+**✅ Situações em que a comparação vale**
+
+- **Modelos encaixados** (nested), como ARIMA(1,1,1) vs ARIMA(2,1,2): mesmo $d$, mesma série, mudam apenas os parâmetros estimados. AIC/BIC são exatamente o ferramental certo aqui.
+- **Modelos não-encaixados mas sobre os mesmos dados**: ARIMA(1,1,1) vs ARIMA(0,1,2) — também ok.
+- **Mudança na distribuição da variável resposta**: por exemplo, comparar um GARCH(1,1) com erros Normais contra um GARCH(1,1) com erros $t$-Student (Aula 4). Os dados são os mesmos; o que muda é a família distribucional usada para calcular $\log L$. Aqui o AIC/BIC é **o instrumento correto** para decidir qual distribuição se ajusta melhor, penalizando o parâmetro extra ($\nu$) que a $t$ introduz.
+
+#### Por que AIC e não validação cruzada diretamente?
+
+Uma pergunta natural é: se o objetivo é prever bem, por que não usar **validação cruzada** (CV) e pular toda essa história de critérios de informação? Três razões:
+
+1. **Custo computacional**: CV exige ajustar o modelo $k$ vezes (ou $n$ vezes em LOOCV), enquanto AIC é calculado **uma única vez** a partir do ajuste MLE padrão.
+2. **Dependência temporal**: em séries temporais, CV não é trivial — embaralhar observações quebra a ordem temporal. É preciso usar variantes como *rolling origin* (que veremos na Aula 3), que são mais caras.
+3. **Equivalência assintótica**: sob condições gerais, **AIC é assintoticamente equivalente ao LOOCV**. Esse é o resultado clássico de Stone (1977): para modelos ajustados por máxima verossimilhança, minimizar AIC e minimizar o erro de predição de LOOCV convergem para a mesma escolha de modelo quando $n \to \infty$. Em outras palavras, **usar AIC já é, de certa forma, fazer LOOCV — só que de graça, analiticamente**.
+
+::: {.callout-tip}
+## AIC vs. BIC: para que serve cada um
+- **AIC / AICc** → minimiza erro de previsão esperado (conexão com LOOCV). Use quando o objetivo é **prever bem**.
+- **BIC** → consistente para seleção do "verdadeiro" modelo, assumindo que ele está entre os candidatos. Use quando o objetivo é **descobrir a estrutura correta**.
+
+Os dois podem discordar: BIC tende a escolher modelos mais **parcimoniosos** que AIC, especialmente com $n$ grande ($\log n > 2$). Na prática de previsão, **prefira AICc**.
+:::
+
+**Referência**: Stone, M. (1977). *An Asymptotic Equivalence of Choice of Model by Cross-Validation and Akaike's Criterion*. Journal of the Royal Statistical Society. Series B, 39(1), 44–47. Uma discussão moderna e acessível está em Hyndman & Athanasopoulos, *Forecasting: Principles and Practice* (3ª ed.), seção 5.5.
+
 ### Etapa 3: Diagnóstico
 
 ::: {.conceito-card}
@@ -392,6 +472,11 @@ $$Q = n(n+2) \sum_{k=1}^{h} \frac{\hat{\rho}_k^2}{n-k}$$
 :::
 
 $H_0$: resíduos são ruído branco. Se p-valor $< 0.05$, rejeitamos — o modelo precisa ser revisado.
+
+::: {.callout-note}
+## Correção de graus de liberdade
+Quando o Ljung-Box é aplicado a resíduos de um ARIMA($p,d,q$) com $m = p + q$ parâmetros estimados, a distribuição **não** é $\chi^2_h$, mas sim $\chi^2_{h - m}$. Intuição: cada parâmetro estimado "consome" um grau de liberdade. Isso torna o teste mais **conservador** — mais difícil rejeitar. Muitas implementações fazem essa correção automaticamente quando você informa o número de parâmetros estimados; confira o argumento `model_df` da sua biblioteca.
+:::
 
 ### Seleção Automática vs. Manual
 
@@ -478,6 +563,30 @@ forecast = sf.forecast(df=df_sf, h=12, level=[80, 95])
 ::: {.callout-tip}
 ## Dica: Interpretando o resultado do AutoARIMA
 Após o ajuste, inspecione qual modelo foi escolhido com `sf.fitted_[0, 0].model_`. Compare com sua análise visual de ACF/PACF — eles concordam? Se não, investigue por quê.
+:::
+
+## ARIMAX: Quando Há Variáveis Externas
+
+Muitas vezes a previsão melhora ao incluir **variáveis exógenas** (exógenas = determinadas fora do modelo): um preço pode depender do dólar, as vendas de uma loja podem depender de campanhas de marketing, o consumo de energia da temperatura. Dois caminhos possíveis:
+
+### Caminho 1: regressão linear com erros ARMA
+
+::: {.formula-highlight}
+[Regressão com erros ARMA]{.formula-label}
+$$Y_t = \boldsymbol{\beta}^\top \mathbf{x}_t + \eta_t, \qquad \Phi(L)\, \eta_t = \Theta(L)\, \varepsilon_t$$
+:::
+
+Interpretação limpa: primeiro explicamos $Y_t$ por variáveis exógenas $\mathbf{x}_t$; o que sobra, o resíduo $\eta_t$, ainda pode ter estrutura de autocorrelação, que é então absorvida por um ARMA. Os coeficientes $\boldsymbol\beta$ mantêm a **interpretação clássica de regressão** ("um aumento de 1% no dólar está associado a ..."), porque a dinâmica temporal foi empurrada para o erro.
+
+### Caminho 2: ARIMAX "clássico"
+
+$$\Phi(L)\, (1-L)^d\, Y_t = c + \boldsymbol{\beta}^\top \mathbf{x}_t + \Theta(L)\, \varepsilon_t$$
+
+Aqui as exógenas entram **dentro** do filtro AR do $Y_t$, e os coeficientes $\boldsymbol\beta$ **não** têm mais a interpretação de regressão pura — são "efeitos sobre a série já filtrada pelo AR". Muitas bibliotecas chamam essa formulação de "ARIMAX" por simplicidade, mas Hyndman argumenta fortemente que o **Caminho 1 é preferível** sempre que possível: preserva interpretabilidade e separa sinal exógeno de dinâmica endógena.
+
+::: {.callout-tip}
+## Regra prática
+Se o seu objetivo é **entender o efeito** de uma variável externa (ex.: preço do dólar no preço de um ativo), use **regressão com erros ARMA**. Se o foco é apenas **previsão** e a interpretabilidade dos betas não importa, ambas as formulações funcionam; a clássica ARIMAX costuma ser mais fácil de encaixar em pipelines existentes. Em `statsmodels`, use `SARIMAX(..., exog=...)`; em `statsforecast`, passe `X_df` no `forecast()`.
 :::
 
 ## Quizzes: Teste seu Entendimento

@@ -44,29 +44,57 @@ $$r_t = \ln\left(\frac{P_t}{P_{t-1}}\right) = \ln(P_t) - \ln(P_{t-1})$$
 Estas são regularidades empíricas observadas em praticamente **todos os mercados financeiros** ao redor do mundo:
 
 ```{mermaid}
-mindmap
-  root((Fatos<br/>Estilizados))
-    Caudas pesadas
-      Retornos não são normais
-      Excesso de curtose
-      Eventos extremos mais frequentes
-    Clusters de volatilidade
-      Períodos calmos e turbulentos
-      Volatilidade é persistente
-      "Volatilidade gera volatilidade"
-    Efeito alavancagem
-      Quedas geram mais volatilidade
-      Assimetria na resposta a choques
-      Medo > Euforia
-    Ausência de autocorrelação
-      Retornos são quase iid
-      Mas retornos ao quadrado não!
-      Mercado eficiente no nível 1
+%%| fig-align: center
+flowchart TD
+    R(("Fatos<br/>Estilizados"))
+    R --> A["<b>Caudas pesadas</b><br/>Excesso de curtose<br/>Eventos extremos frequentes"]
+    R --> B["<b>Clusters de volatilidade</b><br/>Períodos calmos e turbulentos<br/>Volatilidade persistente"]
+    R --> C["<b>Efeito alavancagem</b><br/>Quedas geram mais volatilidade<br/>Medo > Euforia"]
+    R --> D["<b>Sem autocorrelação nos retornos</b><br/>r_t quase i.i.d.<br/>Mas r_t² tem forte ACF!"]
+
+    classDef root fill:#E50505,stroke:#3F3F3F,stroke-width:2px,color:#fff
+    classDef fact fill:#ffffff,stroke:#3F3F3F,stroke-width:1.5px,color:#3F3F3F
+    class R root
+    class A,B,C,D fact
+
+    linkStyle default stroke:#3F3F3F,stroke-width:1.5px
 ```
+
+### Mercado eficiente, random walk e volatilidade
+
+Vale conectar o quarto fato estilizado — **ausência de autocorrelação nos retornos** — com um conceito que apareceu já na Aula 1 (random walk) e que é a base conceitual de praticamente toda finanças moderna: a **hipótese do mercado eficiente** (EMH).
+
+Na sua versão mais comum (*forma fraca*), a EMH afirma que **o preço atual já incorpora toda a informação contida no histórico de preços**. A consequência estatística é simples e poderosa: se fosse possível prever a **direção** do próximo retorno a partir dos retornos passados, haveria uma oportunidade de arbitragem — traders a explorariam, e o padrão desapareceria. Em equilíbrio, portanto, a série de retornos deve ser aproximadamente **não-autocorrelacionada**.
+
+Isso é exatamente o que observamos nos dados: a ACF dos retornos é tipicamente indistinguível de ruído branco. Equivalentemente, o **preço** segue aproximadamente uma **random walk** (a forma mais simples de processo não-estacionário que vimos na Aula 1), já que
+
+$$P_t = P_{t-1} \exp(r_t), \qquad r_t \approx \text{ruído}.$$
+
+Mas — e aqui está o ponto central desta aula — **ausência de autocorrelação não é o mesmo que independência**. Duas variáveis podem ser não-correlacionadas e ainda assim estatisticamente dependentes através de momentos de ordem mais alta. É exatamente isso que acontece com retornos financeiros: $\text{Corr}(r_t, r_{t-k}) \approx 0$, mas $\text{Corr}(r_t^2, r_{t-k}^2) \gg 0$.
 
 ::: {.conceito-card}
 #### O Paradoxo Fundamental
-Os **retornos** parecem não ter autocorrelação (mercado eficiente), mas os **retornos ao quadrado** têm autocorrelação forte e persistente. Isso significa que, embora não possamos prever a *direção* do retorno de amanhã, podemos prever sua *magnitude* (volatilidade). Esse é o fundamento dos modelos GARCH.
+A EMH proíbe prever a **direção** do próximo retorno — mas **não proíbe** prever sua **magnitude**. Os retornos são quase não-correlacionados (compatível com mercado eficiente), mas os retornos ao quadrado têm ACF forte e persistente. Podemos prever a incerteza de amanhã, mesmo sem saber o sinal. Essa é a brecha que os modelos GARCH exploram: eles não quebram a EMH, eles operam exatamente no espaço que a EMH deixa livre.
+:::
+
+## Notação Formal: Média e Variância Condicional
+
+Antes de formalizar os modelos, fixemos a notação que será usada em toda a aula (e na aula seguinte, sobre VaR). Seja $\mathcal{F}_{t-1}$ o **conjunto de informação disponível até $t-1$** (preços, retornos, indicadores observados).
+
+::: {.formula-highlight}
+[Média e variância condicional]{.formula-label}
+$$\mu_t = \mathbb{E}[r_t \mid \mathcal{F}_{t-1}], \qquad h_t = \operatorname{Var}(r_t \mid \mathcal{F}_{t-1}) = \mathbb{E}\!\left[(r_t - \mu_t)^2 \mid \mathcal{F}_{t-1}\right]$$
+:::
+
+Ou seja, $\mu_t$ é a **previsão** de $r_t$ feita em $t-1$ e $h_t$ mede a **incerteza** em torno dessa previsão. Decompomos o retorno como
+
+$$r_t = \mu_t + \varepsilon_t, \qquad \varepsilon_t = \sqrt{h_t}\, z_t, \qquad z_t \sim \text{i.i.d.}(0,1).$$
+
+Toda a modelagem de volatilidade (ARCH, GARCH, EGARCH, SV, RiskMetrics) consiste em **escolher uma forma funcional para $h_t$** em função da informação passada. A média condicional $\mu_t$ frequentemente é modelada como constante ou como um ARMA pequeno.
+
+::: {.conceito-card}
+#### Duas previsões, não uma
+Modelar uma série financeira envolve **dois objetos**: a previsão do retorno ($\mu_t$) e a previsão da incerteza ($h_t$). Para decisões de risco, $h_t$ costuma ser mais importante que $\mu_t$ — e muito mais previsível.
 :::
 
 ## Modelo ARCH: A Ideia Original
@@ -200,6 +228,29 @@ viewof garch_seed = Inputs.button("Gerar outra realização", {value: 0, reduce:
 - $\alpha + \beta \approx 1$: volatilidade extremamente persistente (IGARCH) — choques "nunca" desaparecem
 :::
 
+## IGARCH e RiskMetrics (EWMA)
+
+Quando $\alpha + \beta = 1$, o GARCH(1,1) degenera num **IGARCH** (integrated GARCH). Nesse caso, a variância de longo prazo $\omega/(1-\alpha-\beta)$ deixa de existir: choques na volatilidade **nunca se dissipam**, exatamente como uma raiz unitária em séries de nível.
+
+Impondo adicionalmente $\omega = 0$ e reparametrizando $\beta = \lambda$, $\alpha = 1-\lambda$, obtemos exatamente a fórmula do **RiskMetrics™** (J.P. Morgan, 1996):
+
+::: {.formula-highlight}
+[RiskMetrics EWMA]{.formula-label}
+$$h_t = \lambda\, h_{t-1} + (1-\lambda)\, r_{t-1}^2, \qquad \lambda \in (0,1)$$
+:::
+
+Isto é uma **média móvel exponencialmente ponderada** (EWMA) de retornos ao quadrado. O parâmetro padrão do RiskMetrics é $\lambda = 0{,}94$ para dados diários e $\lambda = 0{,}97$ para dados mensais — escolhidos por J.P. Morgan a partir de um ajuste a múltiplos ativos, **sem estimação caso a caso**.
+
+::: {.callout-note}
+## Por que o mercado adotou RiskMetrics?
+- **Sem estimação**: $\lambda$ é fixo, basta calcular recursivamente — fácil de auditar
+- **Parcimonioso**: um único parâmetro governa toda a dinâmica de volatilidade
+- **Recursão simples**: $h_t$ depende apenas de $h_{t-1}$ e $r_{t-1}^2$ (memória O(1))
+- **Conservador**: como $\alpha + \beta = 1$, a volatilidade responde rapidamente a choques recentes
+
+É o baseline universal em VaR regulatório — e o ponto de partida a ser batido por qualquer modelo mais sofisticado.
+:::
+
 ## Variantes: Capturando Assimetria
 
 ### O Efeito Alavancagem
@@ -243,6 +294,67 @@ Os retornos financeiros têm **caudas mais pesadas** que a normal. Alternativas:
 | Normal | Baseline (geralmente inadequada) | — |
 | **t de Student** | Caudas pesadas simétricas — **mais comum** | $\nu$ estimado (tipicamente 4–8) |
 | Skewed-t | Caudas pesadas e assimétricas | $\nu$ + parâmetro de assimetria |
+
+## Volatilidade Estocástica: Quando $h_t$ Tem Seu Próprio Choque
+
+Em todos os modelos vistos até aqui (ARCH, GARCH, EGARCH, GJR, IGARCH), a volatilidade $h_t$ é uma **função determinística** da informação passada: dado $\mathcal{F}_{t-1}$, $h_t$ é conhecido exatamente. A volatilidade é uma **resposta mecânica** aos choques observados nos retornos.
+
+Os modelos de **volatilidade estocástica (SV)** partem de uma ideia diferente: a volatilidade é uma **variável latente** com seu próprio choque aleatório, não observável diretamente.
+
+::: {.formula-highlight}
+[SV com log-volatilidade AR(1)]{.formula-label}
+$$r_t = \exp(h_t / 2)\, z_t, \qquad z_t \sim N(0,1)$$
+$$h_t = \mu + \phi (h_{t-1} - \mu) + \sigma_\eta\, \eta_t, \qquad \eta_t \sim N(0,1)$$
+com $z_t \perp \eta_t$.
+:::
+
+Aqui $h_t$ denota a **log-variância** (por isso entra como $\exp(h_t/2)$ no retorno) e segue um AR(1) com média $\mu$, persistência $\phi \in (-1,1)$ e inovação $\sigma_\eta$. O choque $\eta_t$ é distinto do choque do retorno $z_t$: há **duas fontes de aleatoriedade** no sistema.
+
+::: {.conceito-card}
+#### GARCH vs SV em uma frase
+- **GARCH**: "A volatilidade é o que os retornos observados me dizem que ela é." (uma fonte de ruído)
+- **SV**: "A volatilidade tem vida própria — os retornos observados são apenas uma pista ruidosa." (duas fontes de ruído)
+:::
+
+### Por que usar SV?
+
+- **Captura melhor caudas extremas** em algumas séries — o choque extra $\eta_t$ permite saltos na volatilidade que o GARCH tem dificuldade de representar sem um choque enorme em $r_t$
+- **Conexão direta com modelos de precificação de opções** em tempo contínuo (Heston, Hull-White): o limite contínuo do SV-AR(1) é um processo de Ornstein-Uhlenbeck na log-variância
+- **Interpretação de estado latente**: a "volatilidade verdadeira" é um objeto inobservável estimado via filtragem (análogo ao filtro de Kalman)
+
+### Por que não é o padrão?
+
+- **Estimação é cara**: como $h_t$ é latente, a verossimilhança envolve uma integral de alta dimensão. Na prática, usa-se **MCMC** (Markov chain Monte Carlo) ou filtros de partículas
+- **GARCH(1,1) quase sempre dá conta do recado** para aplicações de risco no dia a dia
+- **Ferramentas menos difundidas**: em R, o pacote `stochvol` implementa bem; em Python, o ecossistema é mais escasso (ex.: `PyMC` para implementação manual)
+
+::: {.callout-tip}
+## Quando considerar SV
+- Séries com **saltos bruscos de volatilidade** que o GARCH sub-representa
+- Aplicações em **precificação de opções** onde o modelo de volatilidade precisa acoplar com um modelo contínuo
+- Pesquisa acadêmica e comparações de modelos — SV é um benchmark clássico
+:::
+
+## Toolkit de Diagnóstico
+
+Ajustar um GARCH não é o fim do trabalho — é o começo da **checagem**. Os resíduos padronizados $\hat z_t = \hat\varepsilon_t / \sqrt{\hat h_t}$ devem ser aproximadamente i.i.d. com a distribuição assumida (normal, $t$, etc.). Quatro testes compõem o kit mínimo:
+
+| Teste | O que checa | Hipótese nula $H_0$ | Ação se rejeita |
+|-------|-------------|---------------------|------------------|
+| **ARCH-LM** (Engle) | Heterocedasticidade residual em $\hat z_t^2$ | Sem ARCH restante | Aumentar $p, q$ do GARCH |
+| **Ljung-Box** em $\hat z_t$ | Autocorrelação residual no nível | Resíduos não correlacionados | Modelar média $\mu_t$ (ARMA) |
+| **Ljung-Box** em $\hat z_t^2$ | Autocorrelação residual na variância | Sem clusters restantes | Aumentar ordem ou mudar família |
+| **Shapiro-Wilk / Jarque-Bera** | Normalidade dos resíduos padronizados | $\hat z_t$ normais | Usar $t$-Student ou skewed-$t$ |
+
+::: {.callout-note}
+## Regra prática para os quatro testes
+1. **ARCH-LM** primeiro: se rejeita, o modelo **não capturou** a volatilidade — inútil olhar os outros
+2. **Ljung-Box no nível**: se rejeita, há estrutura na média que você ignorou
+3. **Ljung-Box no quadrado**: segundo filtro para garantir que $h_t$ foi bem especificado
+4. **Normalidade**: quase sempre rejeita em retornos diários — é **esperado** e o remédio é trocar a distribuição, não o modelo de variância
+
+Curtose amostral e skewness complementam os testes formais: retornos diários têm tipicamente curtose entre 4 e 10 (vs. 3 da normal).
+:::
 
 ::: {.caso-negocio}
 #### Caso: Gestão de Risco em Fundo de Investimentos
@@ -336,6 +448,20 @@ Usar normal subestima a probabilidade de eventos extremos, o que é perigoso par
 ## Questão 5: Seu GARCH(1,1) estimou $\alpha + \beta = 1.02$. O que está errado?
 
 O processo é **não estacionário em variância** — a volatilidade não tem média de longo prazo para a qual reverter. Na teoria, $\alpha + \beta$ deve ser $< 1$ para estacionariedade. Na prática, estimativas ligeiramente acima de 1 podem ocorrer por erro amostral. **Ações**: (a) tente IGARCH (que impõe $\alpha + \beta = 1$); (b) verifique se há quebra estrutural na amostra; (c) considere usar uma amostra mais curta e homogênea.
+:::
+
+::: {.callout-caution collapse="true"}
+## Questão 6: Qual a relação entre IGARCH e o RiskMetrics™ da J.P. Morgan?
+
+RiskMetrics é um **IGARCH(1,1) com $\omega = 0$** e um valor fixo de $\lambda$ (tipicamente 0,94 para dados diários). Partindo de $h_t = \omega + \alpha r_{t-1}^2 + \beta h_{t-1}$ com $\alpha + \beta = 1$ e $\omega = 0$, reescrevemos como $h_t = (1-\lambda) r_{t-1}^2 + \lambda h_{t-1}$, que é uma **EWMA** dos retornos ao quadrado. A vantagem prática é que não há estimação — basta uma recursão — e o modelo responde rapidamente a choques recentes. A desvantagem é supor persistência total ($\alpha + \beta = 1$), o que tipicamente superestima a volatilidade de longo prazo após choques isolados.
+:::
+
+::: {.callout-caution collapse="true"}
+## Questão 7: Qual a diferença fundamental entre GARCH e volatilidade estocástica (SV)?
+
+No **GARCH**, a volatilidade $h_t$ é uma **função determinística** da informação passada: dados $\varepsilon_{t-1}$ e $h_{t-1}$, $h_t$ é conhecido exatamente. Há **uma só fonte de ruído** ($z_t$ no retorno).
+
+No **SV**, a volatilidade é uma **variável latente** com seu próprio choque aleatório $\eta_t$, independente do choque do retorno $z_t$. Há **duas fontes de ruído**, e $h_t$ nunca é observado — é estimado via MCMC ou filtros. Consequências: SV captura melhor certos saltos de volatilidade e conecta-se naturalmente a modelos contínuos de precificação de opções, mas sua estimação é muito mais cara. Para risco de mercado do dia a dia, GARCH(1,1) costuma ser suficiente.
 :::
 
 ## Para Saber Mais

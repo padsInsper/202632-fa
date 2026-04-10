@@ -58,6 +58,34 @@ website:
           - text: "---"
           - text: "Trabalho Final"
             href: trabalhos/final.qmd
+      - text: "Códigos"
+        menu:
+          - text: "Visão geral e mapeamento"
+            href: complementar/index.qmd
+          - text: "---"
+          - text: "Aula 1: Fundamentos (notebook)"
+            href: complementar/aula01-fundamentos-notebook.ipynb
+          - text: "Aula 2: ARIMA e Prophet (notebook)"
+            href: complementar/aula02-arima-prophet-notebook.ipynb
+          - text: "Aula 3: DARTS forecasting (notebook)"
+            href: complementar/aula03-darts-forecasting.ipynb
+          - text: "---"
+          - text: "Aula 4: Volatilidade — arch (Python)"
+            href: complementar/aula04-volatilidade-arch-python.ipynb
+          - text: "Aula 4: Volatilidade — statsforecast"
+            href: complementar/aula04-volatilidade-statsforecast.ipynb
+          - text: "Aula 4: GARCH e SV em R"
+            href: complementar/aula04-volatilidade-garch-r.qmd
+          - text: "---"
+          - text: "Aula 5: CAPM e VaR (Python)"
+            href: complementar/aula05-capm-var-yfinance.ipynb
+          - text: "Aula 6: Otimização de carteira"
+            href: complementar/aula06-otimizacao-markowitz.ipynb
+          - text: "---"
+          - text: "Aula 7: VAR, cointegração, pair trading"
+            href: complementar/aula07-var-cointegracao-pairtrading.ipynb
+          - text: "Aula 7: VAR multivariado em R (MTS)"
+            href: complementar/aula07-var-multivariado-r.qmd
       - text: "Slides"
         menu:
           - text: "Aula 1: Fundamentos"
@@ -95,7 +123,7 @@ format:
     css: assets/insper-custom.css
     toc: true
     toc-depth: 3
-    code-fold: true
+    code-fold: show
     code-tools: true
     code-copy: true
     code-overflow: wrap
