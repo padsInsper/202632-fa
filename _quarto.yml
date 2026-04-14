@@ -24,36 +24,34 @@ website:
         href: cronograma.qmd
       - text: "Parte 1: Séries Temporais"
         menu:
-          - text: "Aula 1: Fundamentos"
+          - text: "Aula 1: Fundamentos (25/abr)"
             href: aulas/aula01-fundamentos.qmd
-          - text: "Aula 2: ARIMA e SARIMA"
-            href: aulas/aula02-arima.qmd
-          - text: "Aula 3: Previsão e Validação"
-            href: aulas/aula03-previsao.qmd
-          - text: "---"
-          - text: "Lab 1: Exploração de Séries"
+          - text: "Lab 1: Exploração de Séries (27/abr)"
             href: labs/lab01-exploracao.qmd
-          - text: "Lab 2: Pipeline de Previsão"
+          - text: "Aula 2: ARIMA e SARIMA (04/mai)"
+            href: aulas/aula02-arima.qmd
+          - text: "Aula 3: Previsão e Validação (11/mai)"
+            href: aulas/aula03-previsao.qmd
+          - text: "Lab 2: Pipeline de Previsão (18/mai)"
             href: labs/lab02-pipeline.qmd
           - text: "---"
           - text: "Trabalho Intermediário"
             href: trabalhos/intermediario.qmd
       - text: "Parte 2: Financial Analytics"
         menu:
-          - text: "Aula 4: Volatilidade e GARCH"
+          - text: "Aula 4: Volatilidade e GARCH (25/mai)"
             href: aulas/aula04-volatilidade.qmd
-          - text: "Aula 5: VaR e Risco"
+          - text: "Aula 5: VaR e Risco (01/jun)"
             href: aulas/aula05-var.qmd
-          - text: "Aula 6: CAPM e Portfólios"
-            href: aulas/aula06-portfolios.qmd
-          - text: "Aula 7: Tópicos Avançados"
-            href: aulas/aula07-avancados.qmd
-          - text: "---"
-          - text: "Lab 3: Séries Financeiras"
+          - text: "Lab 3: Séries Financeiras (08/jun)"
             href: labs/lab03-financeiras.qmd
-          - text: "Lab 4: Otimização de Portfólios"
+          - text: "Lab 4: Risco e Portfólios (08/jun)"
             href: labs/lab04-portfolios.qmd
-          - text: "Lab 5: Projeto Final"
+          - text: "Aula 6: CAPM e Portfólios (13/jun)"
+            href: aulas/aula06-portfolios.qmd
+          - text: "Aula 7: Tópicos Avançados (13/jun)"
+            href: aulas/aula07-avancados.qmd
+          - text: "Lab 5: Projeto Final (15/jun)"
             href: labs/lab05-projeto.qmd
           - text: "---"
           - text: "Trabalho Final"
