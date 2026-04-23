@@ -1,8 +1,6 @@
 ---
 title: "Lab 1: Exploração de Séries Temporais"
 subtitle: "Seu primeiro contato prático com séries temporais em Python"
-execute:
-  eval: false
 ---
 
 ::: {.objetivos}

@@ -1,5 +1,5 @@
 ---
-title: "Aula 5: VaR e Gestão de Risco"
+title: "Aula 6: VaR e Gestão de Risco"
 subtitle: "Quantificando perdas potenciais"
 format:
   html:
@@ -161,9 +161,9 @@ $$\text{VaR}_\alpha^{\text{short}} = (\mu + z_{1-\alpha} \cdot \sigma) \cdot W$$
 Para uma normal simétrica as magnitudes são iguais; para distribuições assimétricas (skewed-$t$), os dois lados precisam ser calculados separadamente.
 :::
 
-### Conexão com a Aula 4: RiskMetrics como VaR paramétrico
+### Conexão com a Aula 5: RiskMetrics como VaR paramétrico
 
-O RiskMetrics™ (visto na Aula 4) é exatamente um VaR paramétrico com $\mu = 0$, distribuição normal e $\sigma_t$ estimado por IGARCH/EWMA:
+O RiskMetrics™ (visto na Aula 5) é exatamente um VaR paramétrico com $\mu = 0$, distribuição normal e $\sigma_t$ estimado por IGARCH/EWMA:
 
 $$\text{VaR}_{\alpha,t}^{\text{RM}} = -z_\alpha \cdot \sqrt{h_t}, \qquad h_t = \lambda h_{t-1} + (1-\lambda) r_{t-1}^2$$
 

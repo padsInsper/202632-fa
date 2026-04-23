@@ -1,12 +1,12 @@
 ---
-title: "CAPM e Otimização de Portfólios"
+title: "VaR e Gestão de Risco"
 subtitle: "Financial Analytics: PADS Insper 2026.2"
 author: "Programa Avançado de Data Science e Decisão"
 format:
   revealjs:
     theme: [default, ../assets/insper-theme.scss]
     logo: ../assets/img/logo-insper-branco.png
-    footer: "Financial Analytics: Aula 6"
+    footer: "Financial Analytics: Aula 5"
     slide-number: true
     transition: fade
     width: 1280
@@ -17,114 +17,122 @@ format:
     scrollable: true
 ---
 
-## CAPM
+## O que é VaR?
 
-$$E[R_i] = R_f + \beta_i \cdot (E[R_m] - R_f)$$
+> *"Com 95% de confiança, não perderemos mais que R\$ X nos próximos 10 dias."*
 
-Quanto de retorno um ativo **deve** oferecer dado seu risco?
+$$P(L > \text{VaR}_\alpha) = 1 - \alpha$$
 
-| Parâmetro | Significado |
-|-----------|-------------|
-| $R_f$ | Taxa livre de risco (CDI) |
-| $\beta_i$ | Sensibilidade ao mercado |
-| $E[R_m] - R_f$ | Prêmio de risco |
+- $L$: perda do portfólio
+- $\alpha$: nível de confiança (95% ou 99%)
+- Horizonte temporal (1 dia, 10 dias)
 
-## Interpretando o Beta
+## Três Abordagens
 
-$$\beta_i = \frac{\text{Cov}(R_i, R_m)}{\text{Var}(R_m)}$$
+| Método | Hipóteses | Flexibilidade |
+|--------|-----------|---------------|
+| **Paramétrico** | Distribuição conhecida | Baixa |
+| **Histórico** | Nenhuma explícita | Média |
+| **Monte Carlo** | Modelo paramétrico | Alta |
 
-| Beta | Significado | Exemplo |
-|------|-------------|---------|
-| $\beta = 0$ | Sem risco de mercado | CDI |
-| $\beta = 1$ | Move igual ao mercado | BOVA11 |
-| $\beta > 1$ | Mais volátil | Tech, small caps |
-| $\beta < 1$ | Menos volátil | Elétricas |
+## VaR Paramétrico
 
-## Alpha de Jensen
+$$\text{VaR}_\alpha = -(\mu + z_\alpha \cdot \sigma) \cdot W$$
 
-$$\alpha_i = R_i - [R_f + \beta_i (R_m - R_f)]$$
+- Rápido e analítico
+- Funciona bem com GARCH ($\sigma_t$ dinâmico)
+- **Problema**: subestima risco se retornos não são normais
 
-- $\alpha > 0$: gestor **gerou valor** além do risco
-- $\alpha = 0$: retorno consistente com risco
-- $\alpha < 0$: gestor **não compensou** o risco
+## VaR Histórico
 
-## Decomposição do Risco
+1. Colete $T$ retornos históricos
+2. Ordene do menor ao maior
+3. VaR 95% = percentil 5%
 
-$$\underbrace{\sigma_i^2}_{\text{total}} = \underbrace{\beta_i^2 \sigma_m^2}_{\text{sistemático}} + \underbrace{\sigma^2(\varepsilon_i)}_{\text{idiossincrático}}$$
+- Não assume distribuição
+- **Problema**: depende da janela e assume que futuro = passado
 
-- **Sistemático**: não diversificável, **remunerado** pelo mercado ($\beta$)
-- **Idiossincrático**: diversificável, **não remunerado**
+## VaR Monte Carlo
 
-Portfólio com 20-30 ações já elimina a maior parte do idiossincrático.
+1. Estime modelo (GARCH, cópulas, etc.)
+2. Simule $N$ cenários (10.000+)
+3. VaR = quantil da distribuição simulada
 
-## Beta de um Portfólio
+- O mais flexível (opções, não-linearidades)
+- **Problema**: computacionalmente custoso
 
-$$\beta_p = \sum_{i=1}^{n} w_i\, \beta_i$$
+## Horizonte: Regra do $\sqrt{k}$
 
-**Linear nos pesos**. Implicações práticas:
+Para retornos i.i.d., a variância escala linearmente, o desvio padrão com $\sqrt{k}$:
 
-- **Hedge**: vender $\beta_p \cdot W$ do índice futuro neutraliza o risco de mercado
-- **Alocação tática**: ajustar $\beta_p$ é ajustar exposição ao mercado
-- **Atribuição**: separa retorno de mercado vs. seleção de ativos
+$$\text{VaR}_\alpha(k \text{ dias}) = \sqrt{k} \cdot \text{VaR}_\alpha(1 \text{ dia})$$
 
-## Security Market Line
+- VaR 1 dia = R\$ 100 mil $\Rightarrow$ VaR 10 dias $\approx$ R\$ 316 mil
+- **Não** é R\$ 1 milhão
+- Quebra se há autocorrelação ou heterocedasticidade forte
 
-Ativos **acima** da SML: $\alpha > 0$ (subvalorizados)
+## VaR de Portfólio: Correlação Importa
 
-Ativos **abaixo** da SML: $\alpha < 0$ (sobrevalorizados)
+$$\text{VaR}_P = \sqrt{\text{VaR}_A^2 + \text{VaR}_B^2 + 2\rho\, \text{VaR}_A \text{VaR}_B}$$
 
-A SML é a reta: $E[R] = R_f + \beta \cdot \text{prêmio}$
+| $\rho$ | VaR do portfólio |
+|--------|------------------|
+| $+1$ | $\text{VaR}_A + \text{VaR}_B$ (sem diversificação) |
+| $0$ | $\sqrt{\text{VaR}_A^2 + \text{VaR}_B^2}$ |
+| $-1$ | $|\text{VaR}_A - \text{VaR}_B|$ (hedge) |
 
-## Fronteira Eficiente de Markowitz
+Portfólio $n$-dimensional: $\text{VaR}_P = z_\alpha \sqrt{\mathbf{w}^\top \Sigma \mathbf{w}} \cdot W$
 
-$$\min_{\mathbf{w}} \quad \mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w}$$
-$$\text{s.a.} \quad \mathbf{w}^T \boldsymbol{\mu} = \mu_{\text{alvo}}, \quad \mathbf{w}^T \mathbf{1} = 1$$
+## Correção $t$-Student
 
-**Ideia**: o risco do portfólio **não é** a média dos riscos — a diversificação reduz risco total.
+Como a $t$ tem variância $\nu/(\nu-2)$, o VaR paramétrico precisa de um ajuste:
 
-## O Poder da Diversificação
+$$\text{VaR}_\alpha = -\left(\mu + t^*_\nu(1-\alpha) \cdot \sigma \cdot \sqrt{\tfrac{\nu-2}{\nu}}\right) \cdot W$$
 
-- **Correlação alta** (0.9): pouco benefício
-- **Correlação baixa** (0.2): grande benefício
-- **Correlação negativa** (-0.5): benefício máximo
+Esquecer o fator $\sqrt{(\nu-2)/\nu}$ leva a VaRs **superestimados**.
 
-Com $\rho = -1$ entre dois ativos: é possível **eliminar** todo o risco!
+## Expected Shortfall (ES)
 
-## Restrições Práticas
+$$\text{ES}_\alpha = E[L \mid L > \text{VaR}_\alpha]$$
 
-| Restrição | Motivação |
-|-----------|-----------|
-| $w_i \geq 0$ | Sem short selling |
-| $w_i \leq 30\%$ | Diversificação mínima |
-| Limite por setor | Concentração setorial |
-| Custos de transação | Realismo |
+O VaR diz *onde* está o limiar. O ES diz **quão ruim é quando ultrapassa**.
 
-::: {.callout-warning}
-Sem restrições, Markowitz frequentemente produz portfólios **extremos** (90% em 1 ativo) → "error maximization"
+::: {.callout-important}
+ES é **subaditivo** (diversificação sempre ajuda).
+VaR **não é** (pode dar resultados contra-intuitivos).
+
+**Basileia III** adotou ES como padrão.
 :::
 
-## Sharpe = Inclinação da CML
+## Backtesting
 
-**Capital Market Line**: reta que liga $R_f$ ao portfólio de mercado.
+Compare violações observadas vs. esperadas:
 
-$$E[R_p] = R_f + \underbrace{\frac{E[R_m] - R_f}{\sigma_m}}_{\text{Sharpe do mercado}} \cdot \sigma_p$$
+| Teste | Avalia |
+|-------|--------|
+| **Kupiec** | Frequência de violações |
+| **Christoffersen** | Independência das violações |
 
-- A inclinação da CML **é** o Sharpe ratio
-- O portfólio **tangente** à fronteira eficiente **maximiza** o Sharpe
-- Todos os portfólios na CML dominam qualquer portfólio abaixo dela
+### Semáforo de Basileia (VaR 99%, 250 dias):
 
-É por isso que o Sharpe é o indicador de performance número 1.
+| Zona | Violações | Ação |
+|------|-----------|------|
+| Verde | 0–4 | OK |
+| Amarela | 5–9 | Investigar |
+| Vermelha | 10+ | Modelo rejeitado |
 
-## Indicadores de Performance
+## Caso: Comitê de Risco
 
-| Indicador | Fórmula | O que mede |
-|-----------|---------|------------|
-| **Sharpe** | $(R_p - R_f) / \sigma_p$ | Retorno/risco total |
-| **Sortino** | $(R_p - R_f) / \sigma_{\text{down}}$ | Retorno/risco negativo |
-| **Max Drawdown** | Maior queda do pico | Pior cenário |
+VaR 99%, 250 dias: **8 violações** (esperado: 2.5)
+
+- Taxa observada: 3.2% (deveria ser 1%)
+- Zona **amarela** de Basileia
+- Modelo provavelmente subestima o risco
+
+**Ações**: revisar distribuição (normal → t?), recalibrar volatilidade (GARCH?), verificar correlações.
 
 ## Próximos Passos
 
-1. **Lab 4**: construir fronteira eficiente em Python
-2. **Competição de Portfólios**: monte sua carteira!
-3. **Aula 7**: tópicos avançados (VAR, cointegração, pair trading)
+1. **Aula 6**: CAPM, fronteira eficiente, otimização de portfólios
+2. **Lab 4**: implementar VaR + fronteira eficiente em Python
+3. **Projeto Final**: análise completa com gestão de risco

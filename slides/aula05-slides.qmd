@@ -1,12 +1,12 @@
 ---
-title: "VaR e Gestão de Risco"
+title: "Volatilidade e Modelos GARCH"
 subtitle: "Financial Analytics: PADS Insper 2026.2"
 author: "Programa Avançado de Data Science e Decisão"
 format:
   revealjs:
     theme: [default, ../assets/insper-theme.scss]
     logo: ../assets/img/logo-insper-branco.png
-    footer: "Financial Analytics: Aula 5"
+    footer: "Financial Analytics: Aula 4"
     slide-number: true
     transition: fade
     width: 1280
@@ -17,122 +17,134 @@ format:
     scrollable: true
 ---
 
-## O que é VaR?
+## De Séries Temporais para Finanças
 
-> *"Com 95% de confiança, não perderemos mais que R\$ X nos próximos 10 dias."*
+Séries financeiras são **fundamentalmente diferentes**:
 
-$$P(L > \text{VaR}_\alpha) = 1 - \alpha$$
+- Retornos quase sem autocorrelação (mercado eficiente)
+- Retornos ao quadrado **com** autocorrelação forte
+- Caudas pesadas (eventos extremos)
+- Clusters de volatilidade
+- Efeito alavancagem (quedas → mais volatilidade)
 
-- $L$: perda do portfólio
-- $\alpha$: nível de confiança (95% ou 99%)
-- Horizonte temporal (1 dia, 10 dias)
+## Log-Retorno
 
-## Três Abordagens
+$$r_t = \ln\left(\frac{P_t}{P_{t-1}}\right)$$
 
-| Método | Hipóteses | Flexibilidade |
-|--------|-----------|---------------|
-| **Paramétrico** | Distribuição conhecida | Baixa |
-| **Histórico** | Nenhuma explícita | Média |
-| **Monte Carlo** | Modelo paramétrico | Alta |
+**Vantagens:**
 
-## VaR Paramétrico
+1. Aditividade temporal: $r_{t:t+k} = r_t + r_{t+1} + \cdots + r_{t+k}$
+2. Simetria: queda e recuperação são simétricas em log
+3. Para $|R_t| < 10\%$: $r_t \approx R_t$
 
-$$\text{VaR}_\alpha = -(\mu + z_\alpha \cdot \sigma) \cdot W$$
-
-- Rápido e analítico
-- Funciona bem com GARCH ($\sigma_t$ dinâmico)
-- **Problema**: subestima risco se retornos não são normais
-
-## VaR Histórico
-
-1. Colete $T$ retornos históricos
-2. Ordene do menor ao maior
-3. VaR 95% = percentil 5%
-
-- Não assume distribuição
-- **Problema**: depende da janela e assume que futuro = passado
-
-## VaR Monte Carlo
-
-1. Estime modelo (GARCH, cópulas, etc.)
-2. Simule $N$ cenários (10.000+)
-3. VaR = quantil da distribuição simulada
-
-- O mais flexível (opções, não-linearidades)
-- **Problema**: computacionalmente custoso
-
-## Horizonte: Regra do $\sqrt{k}$
-
-Para retornos i.i.d., a variância escala linearmente, o desvio padrão com $\sqrt{k}$:
-
-$$\text{VaR}_\alpha(k \text{ dias}) = \sqrt{k} \cdot \text{VaR}_\alpha(1 \text{ dia})$$
-
-- VaR 1 dia = R\$ 100 mil $\Rightarrow$ VaR 10 dias $\approx$ R\$ 316 mil
-- **Não** é R\$ 1 milhão
-- Quebra se há autocorrelação ou heterocedasticidade forte
-
-## VaR de Portfólio: Correlação Importa
-
-$$\text{VaR}_P = \sqrt{\text{VaR}_A^2 + \text{VaR}_B^2 + 2\rho\, \text{VaR}_A \text{VaR}_B}$$
-
-| $\rho$ | VaR do portfólio |
-|--------|------------------|
-| $+1$ | $\text{VaR}_A + \text{VaR}_B$ (sem diversificação) |
-| $0$ | $\sqrt{\text{VaR}_A^2 + \text{VaR}_B^2}$ |
-| $-1$ | $|\text{VaR}_A - \text{VaR}_B|$ (hedge) |
-
-Portfólio $n$-dimensional: $\text{VaR}_P = z_\alpha \sqrt{\mathbf{w}^\top \Sigma \mathbf{w}} \cdot W$
-
-## Correção $t$-Student
-
-Como a $t$ tem variância $\nu/(\nu-2)$, o VaR paramétrico precisa de um ajuste:
-
-$$\text{VaR}_\alpha = -\left(\mu + t^*_\nu(1-\alpha) \cdot \sigma \cdot \sqrt{\tfrac{\nu-2}{\nu}}\right) \cdot W$$
-
-Esquecer o fator $\sqrt{(\nu-2)/\nu}$ leva a VaRs **superestimados**.
-
-## Expected Shortfall (ES)
-
-$$\text{ES}_\alpha = E[L \mid L > \text{VaR}_\alpha]$$
-
-O VaR diz *onde* está o limiar. O ES diz **quão ruim é quando ultrapassa**.
+## O Paradoxo Fundamental
 
 ::: {.callout-important}
-ES é **subaditivo** (diversificação sempre ajuda).
-VaR **não é** (pode dar resultados contra-intuitivos).
+**Retornos** parecem imprevisíveis (mercado eficiente)
 
-**Basileia III** adotou ES como padrão.
+**Retornos ao quadrado** são previsíveis (volatilidade é persistente)
 :::
 
-## Backtesting
+→ Não podemos prever a **direção**, mas podemos prever a **magnitude**
 
-Compare violações observadas vs. esperadas:
+→ Fundamento dos modelos GARCH
 
-| Teste | Avalia |
-|-------|--------|
-| **Kupiec** | Frequência de violações |
-| **Christoffersen** | Independência das violações |
+## ARCH — Engle (1982)
 
-### Semáforo de Basileia (VaR 99%, 250 dias):
+A variância muda ao longo do tempo:
 
-| Zona | Violações | Ação |
-|------|-----------|------|
-| Verde | 0–4 | OK |
-| Amarela | 5–9 | Investigar |
-| Vermelha | 10+ | Modelo rejeitado |
+$$\sigma_t^2 = \omega + \alpha_1 \varepsilon_{t-1}^2 + \cdots + \alpha_q \varepsilon_{t-q}^2$$
 
-## Caso: Comitê de Risco
+"Se ontem houve choque grande, hoje a volatilidade é alta"
 
-VaR 99%, 250 dias: **8 violações** (esperado: 2.5)
+**Problema**: precisa de muitos lags ($q$ grande)
 
-- Taxa observada: 3.2% (deveria ser 1%)
-- Zona **amarela** de Basileia
-- Modelo provavelmente subestima o risco
+## GARCH(1,1) — Bollerslev (1986)
 
-**Ações**: revisar distribuição (normal → t?), recalibrar volatilidade (GARCH?), verificar correlações.
+$$\sigma_t^2 = \omega + \alpha \varepsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+
+| Parâmetro | Significado | Típico |
+|-----------|-------------|--------|
+| $\alpha$ | Reação a choques | 0.03–0.10 |
+| $\beta$ | Persistência | 0.85–0.95 |
+| $\alpha + \beta$ | Persistência total | 0.95–0.99 |
+
+O GARCH(1,1) é suficiente em **~90% dos casos**.
+
+## Interpretando os Parâmetros
+
+- **$\alpha$ alto, $\beta$ baixo**: picos agudos e curtos de volatilidade
+- **$\alpha$ baixo, $\beta$ alto**: transições lentas entre regimes
+- **$\alpha + \beta \approx 1$**: choques "nunca" desaparecem (IGARCH)
+- **Half-life**: $\ln(0.5) / \ln(\alpha + \beta)$ dias para choque reduzir pela metade
+
+## Efeito Alavancagem
+
+Quedas geram **mais** volatilidade que altas de mesma magnitude.
+
+O GARCH padrão não captura isso ($\varepsilon^2$ trata + e - igualmente).
+
+### Variantes assimétricas:
+
+| Modelo | Como captura | Parâmetro |
+|--------|-------------|-----------|
+| **EGARCH** | Log da variância | $\gamma < 0$ |
+| **GJR-GARCH** | Indicadora $I(\varepsilon < 0)$ | $\gamma > 0$ |
+
+## IGARCH e RiskMetrics (EWMA)
+
+Quando $\alpha + \beta = 1$, reparametrize $\beta = \lambda$, $\omega = 0$:
+
+$$h_t = \lambda\, h_{t-1} + (1-\lambda)\, r_{t-1}^2$$
+
+É exatamente o **RiskMetrics™** (J.P. Morgan, 1996):
+
+- $\lambda = 0{,}94$ para dados diários
+- Sem estimação — parâmetro fixo
+- Baseline universal em VaR regulatório
+
+## Volatilidade Estocástica (SV)
+
+No GARCH, $h_t$ é **determinística** dado o passado. No SV, a volatilidade tem **seu próprio choque**:
+
+$$r_t = \exp(h_t/2)\, z_t$$
+$$h_t = \mu + \phi(h_{t-1} - \mu) + \sigma_\eta\, \eta_t$$
+
+**Duas fontes de ruído**: $z_t$ (retorno) e $\eta_t$ (volatilidade)
+
+- Captura melhor certos saltos de volatilidade
+- Base para Heston e modelos de precificação de opções
+- Estimação cara (MCMC, filtros de partículas)
+
+## Diagnóstico: Toolkit Mínimo
+
+Resíduos padronizados $\hat z_t = \hat\varepsilon_t / \sqrt{\hat h_t}$ devem ser i.i.d.
+
+| Teste | O que checa |
+|-------|-------------|
+| **ARCH-LM** | Volatilidade residual em $\hat z_t^2$ |
+| **Ljung-Box** em $\hat z_t$ | Autocorrelação no nível |
+| **Ljung-Box** em $\hat z_t^2$ | Clusters remanescentes |
+| **Shapiro-Wilk** | Normalidade dos $\hat z_t$ |
+
+→ Se ARCH-LM rejeita, o GARCH **não capturou** a volatilidade
+
+## Distribuição dos Erros
+
+Retornos têm **caudas mais pesadas** que a normal:
+
+| Distribuição | Quando | Parâmetro |
+|-------------|--------|-----------|
+| Normal | Baseline (inadequada) | — |
+| **t-Student** | Caudas simétricas | $\nu \approx 4$–$8$ |
+| Skewed-t | Caudas assimétricas | $\nu$ + assimetria |
+
+::: {.callout-warning}
+Usar normal **subestima** eventos extremos → perigoso para risco!
+:::
 
 ## Próximos Passos
 
-1. **Aula 6**: CAPM, fronteira eficiente, otimização de portfólios
-2. **Lab 4**: implementar VaR + fronteira eficiente em Python
-3. **Projeto Final**: análise completa com gestão de risco
+1. **Lab 3**: ajustar GARCH em ativos da B3 com Python (`arch`)
+2. **Aula 5**: VaR e gestão de risco
+3. Como usar a volatilidade GARCH para calcular VaR dinâmico

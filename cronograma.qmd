@@ -13,22 +13,23 @@ gantt
     axisFormat  %d/%m
 
     section Parte 1
-    Aula 1 Fundamentos           :a1, 2026-04-25, 1d
-    Lab 1 Exploração             :a2, 2026-04-27, 1d
-    Aula 2 ARIMA                 :a3, 2026-05-04, 1d
-    Aula 3 Previsão              :a4, 2026-05-11, 1d
-    Lab 2 Pipeline               :a5, 2026-05-18, 1d
+    Aula 1 Fundamentos (manhã)   :a1, 2026-04-25, 1d
+    Aula 2 ARIMA (tarde)         :a2, 2026-04-25, 1d
+    Lab 1 Exploração             :a3, 2026-04-27, 1d
+    Aula 3 SARIMA e Prophet      :a4, 2026-05-04, 1d
+    Aula 4 Previsão e Validação  :a5, 2026-05-11, 1d
+    Lab 2 Pipeline               :a6, 2026-05-18, 1d
 
     section Transição
     Fechamento P1 + Bridge       :t1, 2026-05-22, 1d
     Office Hours Intermediário   :t2, 2026-05-23, 1d
 
     section Parte 2
-    Aula 4 Volatilidade          :b1, 2026-05-25, 1d
-    Aula 5 VaR                   :b2, 2026-06-01, 1d
-    Lab 3+4 Financeiras e Risco  :b3, 2026-06-08, 1d
-    Aula 6+7 CAPM e Avançados    :b4, 2026-06-13, 1d
-    Lab 5 Projeto                :b5, 2026-06-15, 1d
+    Aula 5 Volatilidade          :b1, 2026-05-25, 1d
+    Aula 6 VaR                   :b2, 2026-06-01, 1d
+    Lab 3 Financeiras+Portfólios :b3, 2026-06-08, 1d
+    Aulas 7+8 CAPM e Avançados   :b4, 2026-06-13, 1d
+    Lab 4 Projeto Final          :b5, 2026-06-15, 1d
     Apresentações finais         :b6, 2026-06-22, 1d
 ```
 
@@ -36,19 +37,28 @@ gantt
 
 ::: {.schedule-card .tipo-juntos}
 ::: {.date}
-Sábado, 25 de Abril — 08h00 a 17h00
+Sábado, 25 de Abril — 08h00 a 12h00
 :::
-[Aula]{.tipo .tipo-juntos-badge} **Presencial** — 8h (4 blocos)
+[Aula]{.tipo .tipo-juntos-badge} **Presencial** — 4h (2 blocos)
 
-**Aula 1 — Fundamentos de Séries Temporais.** Dia completo de abertura, cobrindo toda a base conceitual da Parte 1.
+**Aula 1 — Fundamentos de Séries Temporais.** Manhã do sábado dobrado.
 
-**Bloco 1 (08h–10h):** Abertura do curso, motivação de negócios, componentes de séries temporais e decomposição (clássica e STL).
+**Bloco 1 (08h–10h):** Abertura do curso, motivação de negócios, componentes de séries temporais (tendência, sazonalidade, ciclo, ruído) e decomposição (clássica e STL).
 
-**Bloco 2 (10h–12h):** Estacionariedade, testes ADF e KPSS, diferenciação, tendências estocásticas.
+**Bloco 2 (10h–12h):** Estacionariedade, testes ADF e KPSS, diferenciação, tendências estocásticas; ACF/PACF — intuição, leitura de gráficos e identificação de padrões.
+:::
 
-**Bloco 3 (13h–15h):** ACF e PACF — intuição, leitura de gráficos e identificação de padrões.
+::: {.schedule-card .tipo-juntos}
+::: {.date}
+Sábado, 25 de Abril — 13h00 a 17h00
+:::
+[Aula]{.tipo .tipo-juntos-badge} **Presencial** — 4h (2 blocos)
 
-**Bloco 4 (15h–17h):** Modelos AR, MA e ARMA — intuição e preparação para a exploração prática do Lab 1.
+**Aula 2 — Modelos ARIMA.** Tarde do sábado dobrado, ancorada no material produzido pela manhã.
+
+**Bloco 1 (13h–15h):** Modelos AR, MA, ARMA — simulação e leitura de ACF/PACF; ARIMA com diferenciação; polinômios de defasagem e condições de estacionariedade.
+
+**Bloco 2 (15h–17h):** Procedimento Box-Jenkins (identificação → estimação → diagnóstico), critérios de informação (AICc), diagnóstico residual (Ljung-Box), seleção automática via `AutoARIMA` aplicada à Selic mensal (SGS 4189). Saída de aula: o aluno tem um pipeline ARIMA rodando, pronto para o Lab 1.
 :::
 
 ::: {.schedule-card .tipo-lab}
@@ -57,7 +67,7 @@ Segunda, 27 de Abril — 19h00 a 22h30
 :::
 [Lab]{.tipo .tipo-lab-badge} **Remota** — 3.5h
 
-**Lab 1 — Exploração de Séries Temporais em Python.** Notebook guiado: pandas, statsmodels, plotly. Dados reais de vendas no varejo. Dinâmica: *Bingo da ACF*. Primeira experiência prática aplicando decomposição, estacionariedade e leitura de ACF/PACF sobre séries reais.
+**Lab 1 — Exploração de Séries Temporais em Python.** Notebook guiado: `pandas`, `statsmodels`, `plotly`. Dados reais de IPCA mensal (BCB SGS 433). Dinâmica: *Bingo da ACF*. Primeira experiência prática aplicando decomposição, estacionariedade e leitura de ACF/PACF sobre séries reais.
 :::
 
 ::: {.schedule-card .tipo-aula}
@@ -66,7 +76,7 @@ Segunda, 4 de Maio — 19h00 a 22h30
 :::
 [Aula]{.tipo .tipo-aula-badge} **Remota** — 3.5h
 
-**Aula 2 — ARIMA e SARIMA.** Identificação Box-Jenkins, sazonalidade, critérios de informação e diagnóstico residual. Mini-case: previsão de demanda.
+**Aula 3 — SARIMA e Prophet.** Sazonalidade estocástica vs. determinística, operador $(P,D,Q)_s$, identificação sazonal via ACF/PACF nos lags múltiplos de $s$. Caso prático: IBC-Br original (sem ajuste sazonal, SGS 24363) ajustado via `AutoARIMA(season_length=12)`. Introdução ao **Prophet** como alternativa moderna (tendência linear por partes + Fourier + feriados) e comparação SARIMA vs. Prophet.
 :::
 
 ::: {.schedule-card .tipo-aula}
@@ -75,7 +85,7 @@ Segunda, 11 de Maio — 19h00 a 22h30
 :::
 [Aula]{.tipo .tipo-aula-badge} **Remota** — 3.5h
 
-**Aula 3 — Previsão e Validação.** RMSE, MAPE, MASE, cross-validation temporal (backtest), Prophet, modelos automáticos (`statsforecast.AutoARIMA`). Caso: quando o modelo falha.
+**Aula 4 — Previsão e Validação.** Métricas de erro (MAE, RMSE, MAPE, MASE) e quando usar cada uma. Cross-validation temporal (*expanding* vs. *sliding window*). Backtest com `statsforecast`. Panorama de ferramentas modernas (DARTS, foundation models). Discussão: *quando o modelo falha* (quebras estruturais, outliers, regime shifts).
 :::
 
 ::: {.schedule-card .tipo-lab}
@@ -84,7 +94,7 @@ Segunda, 18 de Maio — 19h00 a 22h30
 :::
 [Lab]{.tipo .tipo-lab-badge} **Remota** — 3.5h
 
-**Lab 2 — Pipeline de Previsão.** Caso prático end-to-end. Cross-validation com statsforecast, comparação de modelos e seleção baseada em backtest. Preparação direta para a entrega intermediária.
+**Lab 2 — Pipeline de Previsão.** Caso prático end-to-end sobre Transferências Federais (BCB SGS 7478). Cross-validation com `statsforecast`, comparação de modelos e seleção baseada em backtest. Preparação direta para a entrega intermediária.
 :::
 
 ::: {.schedule-card .tipo-juntos}
@@ -113,7 +123,7 @@ Segunda, 25 de Maio — 19h00 a 22h30
 :::
 [Aula]{.tipo .tipo-aula-badge} **Remota** — 3.5h
 
-**Aula 4 — Volatilidade e GARCH.** ARCH, GARCH e variantes (EGARCH, GJR-GARCH). Distribuição $t$ de Student, persistência, efeito alavancagem. Interpretação e uso em risco.
+**Aula 5 — Volatilidade e GARCH.** ARCH, GARCH e variantes (EGARCH, GJR-GARCH). Distribuição $t$ de Student, persistência, efeito alavancagem. Interpretação e uso em risco.
 :::
 
 ::: {.schedule-card .tipo-aula}
@@ -122,7 +132,7 @@ Segunda, 1 de Junho — 19h00 a 22h30
 :::
 [Aula]{.tipo .tipo-aula-badge} **Remota** — 3.5h
 
-**Aula 5 — VaR e Gestão de Risco.** VaR paramétrico, histórico e Monte Carlo. Expected Shortfall. Backtesting (Kupiec, semáforo de Basileia). Conexão com a volatilidade GARCH da aula anterior.
+**Aula 6 — VaR e Gestão de Risco.** VaR paramétrico, histórico e Monte Carlo. Expected Shortfall. Backtesting (Kupiec, semáforo de Basileia). Conexão com a volatilidade GARCH da aula anterior.
 :::
 
 ::: {.schedule-card .tipo-lab}
@@ -131,7 +141,10 @@ Segunda, 8 de Junho — 19h00 a 22h30
 :::
 [Lab]{.tipo .tipo-lab-badge} **Remota** — 3.5h
 
-**Labs 3 e 4 — Séries Financeiras, Risco e Portfólios.** Laboratório integrado que mescla o hands-on original do Lab 3 com o Lab 4. Começa com `yfinance` em ativos brasileiros e internacionais: construção de retornos, verificação empírica dos fatos estilizados (cauda pesada, clusters de volatilidade, autocorrelação dos retornos ao quadrado). Em seguida, aplica GARCH (Aula 4) e VaR (Aula 5) sobre esses ativos, constrói portfólios iniciais (equal-weight, mínima variância), calcula VaR de carteira e faz backtesting. Prepara o terreno empírico para a formalização de CAPM e fronteira eficiente na aula presencial seguinte.
+**Lab 3 — Séries Financeiras, GARCH e Portfólios.** Laboratório integrado em dois blocos:
+
+- **Bloco 3.1:** `yfinance` em ativos brasileiros, construção de retornos, verificação empírica dos fatos estilizados (cauda pesada, clusters de volatilidade, autocorrelação dos retornos ao quadrado). Ajuste de GARCH/EGARCH/GJR-GARCH e previsão de volatilidade.
+- **Bloco 3.2:** Matriz de covariância, fronteira eficiente (mínima variância e máximo Sharpe) via `scipy.optimize`, backtest contra Ibovespa, métricas de performance (Sharpe, Max Drawdown). Prepara o terreno para a formalização de CAPM na aula presencial seguinte.
 :::
 
 ::: {.schedule-card .tipo-juntos}
@@ -140,9 +153,9 @@ Sábado, 13 de Junho — 13h00 a 17h00
 :::
 [Aula]{.tipo .tipo-juntos-badge} **Presencial** — 4h (2 blocos)
 
-**Bloco 1 (13h–15h):** Aula 6 — CAPM e Portfólios. Beta, alpha, fronteira eficiente, otimização com restrições. Exercício: *Monte sua Carteira*.
+**Bloco 1 (13h–15h):** Aula 7 — CAPM e Portfólios. Beta, alpha, fronteira eficiente, otimização com restrições. Exercício: *Monte sua Carteira*.
 
-**Bloco 2 (15h–17h):** Aula 7 — Tópicos Avançados + Pitch. VAR multivariado, cointegração, pair trading, DCC-GARCH, panorama de IA em finanças. Fechamento com pitch dos projetos finais e alinhamento de escopo.
+**Bloco 2 (15h–17h):** Aula 8 — Tópicos Avançados + Pitch. VAR multivariado, cointegração, pair trading, DCC-GARCH, panorama de IA em finanças. Fechamento com pitch dos projetos finais e alinhamento de escopo.
 :::
 
 ::: {.schedule-card .tipo-lab}
@@ -151,7 +164,7 @@ Segunda, 15 de Junho — 19h00 a 22h30
 :::
 [Lab]{.tipo .tipo-lab-badge} **Remota** — 3.5h
 
-**Lab 5 — Projeto Final.** Tempo dedicado para finalizar o trabalho final. Notebook de referência com tópicos avançados. Office hours remoto.
+**Lab 4 — Projeto Final (Office Hours).** Tempo dedicado para finalizar o trabalho final. Notebook de referência com tópicos avançados. Office hours remoto com o monitor.
 :::
 
 ::: {.schedule-card .tipo-aula}

@@ -1,12 +1,12 @@
 ---
-title: "Volatilidade e Modelos GARCH"
+title: "Previsão e Validação"
 subtitle: "Financial Analytics: PADS Insper 2026.2"
 author: "Programa Avançado de Data Science e Decisão"
 format:
   revealjs:
     theme: [default, ../assets/insper-theme.scss]
     logo: ../assets/img/logo-insper-branco.png
-    footer: "Financial Analytics: Aula 4"
+    footer: "Financial Analytics: Aula 3"
     slide-number: true
     transition: fade
     width: 1280
@@ -17,134 +17,90 @@ format:
     scrollable: true
 ---
 
-## De Séries Temporais para Finanças
-
-Séries financeiras são **fundamentalmente diferentes**:
-
-- Retornos quase sem autocorrelação (mercado eficiente)
-- Retornos ao quadrado **com** autocorrelação forte
-- Caudas pesadas (eventos extremos)
-- Clusters de volatilidade
-- Efeito alavancagem (quedas → mais volatilidade)
-
-## Log-Retorno
-
-$$r_t = \ln\left(\frac{P_t}{P_{t-1}}\right)$$
-
-**Vantagens:**
-
-1. Aditividade temporal: $r_{t:t+k} = r_t + r_{t+1} + \cdots + r_{t+k}$
-2. Simetria: queda e recuperação são simétricas em log
-3. Para $|R_t| < 10\%$: $r_t \approx R_t$
-
-## O Paradoxo Fundamental
+## Princípio Fundamental
 
 ::: {.callout-important}
-**Retornos** parecem imprevisíveis (mercado eficiente)
-
-**Retornos ao quadrado** são previsíveis (volatilidade é persistente)
+A qualidade de um modelo é medida pela sua performance em **dados que ele nunca viu**.
 :::
 
-→ Não podemos prever a **direção**, mas podemos prever a **magnitude**
+- Performance no treino ≠ performance real
+- **Overfitting**: modelo memoriza ruído
+- Solução: avaliação **fora da amostra**
 
-→ Fundamento dos modelos GARCH
+## Métricas de Erro
 
-## ARCH — Engle (1982)
-
-A variância muda ao longo do tempo:
-
-$$\sigma_t^2 = \omega + \alpha_1 \varepsilon_{t-1}^2 + \cdots + \alpha_q \varepsilon_{t-q}^2$$
-
-"Se ontem houve choque grande, hoje a volatilidade é alta"
-
-**Problema**: precisa de muitos lags ($q$ grande)
-
-## GARCH(1,1) — Bollerslev (1986)
-
-$$\sigma_t^2 = \omega + \alpha \varepsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
-
-| Parâmetro | Significado | Típico |
-|-----------|-------------|--------|
-| $\alpha$ | Reação a choques | 0.03–0.10 |
-| $\beta$ | Persistência | 0.85–0.95 |
-| $\alpha + \beta$ | Persistência total | 0.95–0.99 |
-
-O GARCH(1,1) é suficiente em **~90% dos casos**.
-
-## Interpretando os Parâmetros
-
-- **$\alpha$ alto, $\beta$ baixo**: picos agudos e curtos de volatilidade
-- **$\alpha$ baixo, $\beta$ alto**: transições lentas entre regimes
-- **$\alpha + \beta \approx 1$**: choques "nunca" desaparecem (IGARCH)
-- **Half-life**: $\ln(0.5) / \ln(\alpha + \beta)$ dias para choque reduzir pela metade
-
-## Efeito Alavancagem
-
-Quedas geram **mais** volatilidade que altas de mesma magnitude.
-
-O GARCH padrão não captura isso ($\varepsilon^2$ trata + e - igualmente).
-
-### Variantes assimétricas:
-
-| Modelo | Como captura | Parâmetro |
-|--------|-------------|-----------|
-| **EGARCH** | Log da variância | $\gamma < 0$ |
-| **GJR-GARCH** | Indicadora $I(\varepsilon < 0)$ | $\gamma > 0$ |
-
-## IGARCH e RiskMetrics (EWMA)
-
-Quando $\alpha + \beta = 1$, reparametrize $\beta = \lambda$, $\omega = 0$:
-
-$$h_t = \lambda\, h_{t-1} + (1-\lambda)\, r_{t-1}^2$$
-
-É exatamente o **RiskMetrics™** (J.P. Morgan, 1996):
-
-- $\lambda = 0{,}94$ para dados diários
-- Sem estimação — parâmetro fixo
-- Baseline universal em VaR regulatório
-
-## Volatilidade Estocástica (SV)
-
-No GARCH, $h_t$ é **determinística** dado o passado. No SV, a volatilidade tem **seu próprio choque**:
-
-$$r_t = \exp(h_t/2)\, z_t$$
-$$h_t = \mu + \phi(h_{t-1} - \mu) + \sigma_\eta\, \eta_t$$
-
-**Duas fontes de ruído**: $z_t$ (retorno) e $\eta_t$ (volatilidade)
-
-- Captura melhor certos saltos de volatilidade
-- Base para Heston e modelos de precificação de opções
-- Estimação cara (MCMC, filtros de partículas)
-
-## Diagnóstico: Toolkit Mínimo
-
-Resíduos padronizados $\hat z_t = \hat\varepsilon_t / \sqrt{\hat h_t}$ devem ser i.i.d.
-
-| Teste | O que checa |
-|-------|-------------|
-| **ARCH-LM** | Volatilidade residual em $\hat z_t^2$ |
-| **Ljung-Box** em $\hat z_t$ | Autocorrelação no nível |
-| **Ljung-Box** em $\hat z_t^2$ | Clusters remanescentes |
-| **Shapiro-Wilk** | Normalidade dos $\hat z_t$ |
-
-→ Se ARCH-LM rejeita, o GARCH **não capturou** a volatilidade
-
-## Distribuição dos Erros
-
-Retornos têm **caudas mais pesadas** que a normal:
-
-| Distribuição | Quando | Parâmetro |
-|-------------|--------|-----------|
-| Normal | Baseline (inadequada) | — |
-| **t-Student** | Caudas simétricas | $\nu \approx 4$–$8$ |
-| Skewed-t | Caudas assimétricas | $\nu$ + assimetria |
+| Métrica | Fórmula | Quando usar |
+|---------|---------|-------------|
+| **MAE** | $\frac{1}{h}\sum\|e_i\|$ | Erro na escala da série |
+| **RMSE** | $\sqrt{\frac{1}{h}\sum e_i^2}$ | Penaliza erros grandes |
+| **MAPE** | $\frac{100}{h}\sum\left\|\frac{e_i}{y_i}\right\|$ | Erro percentual |
+| **MASE** | $\frac{\text{MAE}}{\text{MAE}_{\text{naïve}}}$ | Comparável entre séries |
 
 ::: {.callout-warning}
-Usar normal **subestima** eventos extremos → perigoso para risco!
+**MAPE explode** quando $y_t \approx 0$ (retornos financeiros!)
 :::
+
+## Validação Cruzada Temporal
+
+**K-fold tradicional**: embaralha dados → **data leakage**!
+
+**Validação temporal**: treino **sempre precede** teste.
+
+```{mermaid}
+flowchart LR
+    subgraph "Split 1"
+        T1["Treino"] --> V1["Teste"]
+    end
+    subgraph "Split 2"
+        T2["Treino ────────"] --> V2["Teste"]
+    end
+    subgraph "Split 3"
+        T3["Treino ──────────────"] --> V3["Teste"]
+    end
+```
+
+## Expanding vs. Sliding Window
+
+| Método | Treino | Quando usar |
+|--------|--------|-------------|
+| **Expanding** | Cresce a cada split | Processo estável |
+| **Sliding** | Janela fixa | Mudanças de regime |
+
+## Prophet
+
+Modelo aditivo do Meta (2017):
+
+$$y(t) = g(t) + s(t) + h(t) + \varepsilon_t$$
+
+| Componente | Descrição |
+|------------|-----------|
+| $g(t)$ | Tendência com changepoints |
+| $s(t)$ | Sazonalidade (Fourier) |
+| $h(t)$ | Feriados/eventos |
+
+**Bom para**: vendas, tráfego, métricas de negócio com sazonalidade múltipla.
+
+**Não ideal para**: séries financeiras (sem volatilidade condicional).
+
+## ARIMA vs. Prophet
+
+| Critério | ARIMA | Prophet |
+|----------|-------|---------|
+| Fundamentação | Teoria estatística | Engenharia pragmática |
+| Sazonalidade múltipla | Difícil | Nativo |
+| Feriados | Dummies manuais | Nativo |
+| Amostras pequenas | Melhor | Pior |
+| Séries financeiras | Preferível | Menos adequado |
+
+## Quebra Estrutural
+
+Quando o **processo gerador muda** (COVID, crise, regulação):
+
+- Modelos do "mundo antigo" podem ser inúteis
+- Estratégias: dados pós-quebra, dummies, changepoints, monitoramento
 
 ## Próximos Passos
 
-1. **Lab 3**: ajustar GARCH em ativos da B3 com Python (`arch`)
-2. **Aula 5**: VaR e gestão de risco
-3. Como usar a volatilidade GARCH para calcular VaR dinâmico
+- **Bridge para Finanças**: retornos, log-retornos, fatos estilizados
+- **Aula 4**: modelos de volatilidade (ARCH/GARCH)
+- **Entrega Intermediária**: análise completa de série temporal

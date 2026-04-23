@@ -352,22 +352,55 @@ plt.show()
 - A decomposição **clássica** tem `NaN` nos extremos — dados perdidos pela média móvel
 :::
 
-### Em Python com `statsforecast`
+### Em Python com `statsforecast`: MSTL no IBC-Br
 
-O pacote `statsforecast` da Nixtla também oferece decomposição via MSTL (Multiple Seasonal-Trend decomposition using Loess), que suporta **múltiplas sazonalidades** simultaneamente:
+O pacote `statsforecast` da Nixtla oferece decomposição via **MSTL** (Multiple Seasonal-Trend decomposition using Loess), que suporta **múltiplas sazonalidades** simultaneamente. Vamos aplicar no IBC-Br (proxy mensal do PIB real brasileiro, série 24363 no SGS/BCB):
 
 ```{python}
 #| code-fold: true
-#| eval: false
 
+from bcb import sgs
 from statsforecast import StatsForecast
 from statsforecast.models import MSTL, AutoARIMA
 
-# MSTL decompõe e depois modela o resíduo com AutoARIMA
-models = [MSTL(season_length=12, trend_forecaster=AutoARIMA())]
-sf = StatsForecast(models=models, freq='MS')
-sf.fit(df=dados)  # DataFrame com colunas: unique_id, ds, y
+# 1) Carrega o IBC-Br (sem ajuste sazonal) e prepara no formato Nixtla
+ibcbr = sgs.get({'ibcbr': 24363}, start='2003-01-01').rename_axis('ds').reset_index()
+ibcbr['unique_id'] = 'ibcbr'
+ibcbr = ibcbr.rename(columns={'ibcbr': 'y'})[['unique_id', 'ds', 'y']]
+
+# 2) MSTL decompõe (tendência + sazonalidade) e ajusta AutoARIMA no resíduo
+sf = StatsForecast(
+    models=[MSTL(season_length=12, trend_forecaster=AutoARIMA())],
+    freq='MS',
+    n_jobs=1,
+)
+sf.fit(df=ibcbr)
+
+# 3) Componentes estimados
+componentes = sf.fitted_[0, 0].model_
+componentes.tail()
 ```
+
+```{python}
+#| code-fold: true
+import matplotlib.pyplot as plt
+
+fig, axes = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+axes[0].plot(ibcbr['ds'], componentes['data'], color='#E50505', linewidth=0.8)
+axes[0].set_ylabel('IBC-Br (original)')
+axes[1].plot(ibcbr['ds'], componentes['trend'], color='#3ACC9F', linewidth=1.2)
+axes[1].set_ylabel('Tendência (MSTL)')
+axes[2].plot(ibcbr['ds'], componentes['seasonal'], color='#FFCC00', linewidth=0.8)
+axes[2].set_ylabel('Sazonalidade anual')
+axes[2].set_xlabel('Data')
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-tip}
+## Por que o IBC-Br?
+Ele é a série mensal mais próxima do PIB real e tem **sazonalidade fortíssima** (13º salário, safras agrícolas, férias). É o material perfeito para ver a decomposição "funcionando" antes de partirmos para ARIMA/SARIMA na Aula 2.
+:::
 
 ## Autocorrelação (ACF)
 

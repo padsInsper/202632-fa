@@ -1,8 +1,6 @@
 ---
 title: "Lab 2: Pipeline de Previsão End-to-End"
 subtitle: "Do dado bruto ao forecast validado"
-execute:
-  eval: false
 ---
 
 ::: {.objetivos}
@@ -111,7 +109,7 @@ from statsforecast.arima import ndiffs, nsdiffs
 
 # Número de diferenciações necessárias
 d = ndiffs(df['valor'].values)
-D = nsdiffs(df['valor'].values, m=12)
+D = nsdiffs(df['valor'].values, period=12)
 
 print(f"Diferenciações regulares necessárias (d): {d}")
 print(f"Diferenciações sazonais necessárias (D): {D}")

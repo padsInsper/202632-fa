@@ -1,5 +1,5 @@
 ---
-title: "Aula 7: Tópicos Avançados"
+title: "Aula 8: Tópicos Avançados"
 subtitle: "VAR multivariado, cointegração e pair trading"
 format:
   html:

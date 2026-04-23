@@ -1,5 +1,5 @@
 ---
-title: "Aula 2: Modelos ARIMA e SARIMA"
+title: "Aula 2: Modelos ARIMA"
 subtitle: "Identificação, estimação e diagnóstico"
 format:
   html:
@@ -325,19 +325,10 @@ $$\phi(B)(1-B)^d Y_t = c + \theta(B)\varepsilon_t$$
 
 onde $B$ é o operador de defasagem ($BY_t = Y_{t-1}$), $\phi(B) = 1 - \phi_1 B - \cdots - \phi_p B^p$ e $\theta(B) = 1 + \theta_1 B + \cdots + \theta_q B^q$.
 
-### SARIMA: Adicionando Sazonalidade
-
-Para séries com sazonalidade de período $s$ (ex: $s=12$ para dados mensais):
-
-::: {.formula-highlight}
-[SARIMA($p,d,q$)($P,D,Q$)$_s$]{.formula-label}
-$$\underbrace{\phi(B)}_{\text{AR}} \underbrace{\Phi(B^s)}_{\text{AR sazonal}} \underbrace{(1-B)^d}_{\text{dif. regular}} \underbrace{(1-B^s)^D}_{\text{dif. sazonal}} Y_t = c + \underbrace{\theta(B)}_{\text{MA}} \underbrace{\Theta(B^s)}_{\text{MA sazonal}} \varepsilon_t$$
+::: {.callout-note}
+## E a sazonalidade?
+Séries com **sazonalidade** (vendas mensais, PIB trimestral, demanda de energia) pedem uma extensão do ARIMA — o **SARIMA** — que adiciona um segundo bloco de operadores $(P,D,Q)_s$. Veremos isso na **Aula 3**, junto com o **Prophet**.
 :::
-
-| Parte | Parâmetros | Captura |
-|-------|-----------|---------|
-| Não-sazonal $(p,d,q)$ | Dependência entre períodos consecutivos | "Ontem afeta hoje" |
-| Sazonal $(P,D,Q)_s$ | Dependência entre mesmos períodos em ciclos diferentes | "Janeiro passado afeta janeiro deste ano" |
 
 ## Polinômios de Defasagem e Raízes Características
 
@@ -433,14 +424,14 @@ Você só pode comparar dois modelos por AIC/AICc/BIC se **a variável resposta 
 
 - **Modelos encaixados** (nested), como ARIMA(1,1,1) vs ARIMA(2,1,2): mesmo $d$, mesma série, mudam apenas os parâmetros estimados. AIC/BIC são exatamente o ferramental certo aqui.
 - **Modelos não-encaixados mas sobre os mesmos dados**: ARIMA(1,1,1) vs ARIMA(0,1,2) — também ok.
-- **Mudança na distribuição da variável resposta**: por exemplo, comparar um GARCH(1,1) com erros Normais contra um GARCH(1,1) com erros $t$-Student (Aula 4). Os dados são os mesmos; o que muda é a família distribucional usada para calcular $\log L$. Aqui o AIC/BIC é **o instrumento correto** para decidir qual distribuição se ajusta melhor, penalizando o parâmetro extra ($\nu$) que a $t$ introduz.
+- **Mudança na distribuição da variável resposta**: por exemplo, comparar um GARCH(1,1) com erros Normais contra um GARCH(1,1) com erros $t$-Student (Aula 5). Os dados são os mesmos; o que muda é a família distribucional usada para calcular $\log L$. Aqui o AIC/BIC é **o instrumento correto** para decidir qual distribuição se ajusta melhor, penalizando o parâmetro extra ($\nu$) que a $t$ introduz.
 
 #### Por que AIC e não validação cruzada diretamente?
 
 Uma pergunta natural é: se o objetivo é prever bem, por que não usar **validação cruzada** (CV) e pular toda essa história de critérios de informação? Três razões:
 
 1. **Custo computacional**: CV exige ajustar o modelo $k$ vezes (ou $n$ vezes em LOOCV), enquanto AIC é calculado **uma única vez** a partir do ajuste MLE padrão.
-2. **Dependência temporal**: em séries temporais, CV não é trivial — embaralhar observações quebra a ordem temporal. É preciso usar variantes como *rolling origin* (que veremos na Aula 3), que são mais caras.
+2. **Dependência temporal**: em séries temporais, CV não é trivial — embaralhar observações quebra a ordem temporal. É preciso usar variantes como *rolling origin* (que veremos na Aula 4), que são mais caras.
 3. **Equivalência assintótica**: sob condições gerais, **AIC é assintoticamente equivalente ao LOOCV**. Esse é o resultado clássico de Stone (1977): para modelos ajustados por máxima verossimilhança, minimizar AIC e minimizar o erro de predição de LOOCV convergem para a mesma escolha de modelo quando $n \to \infty$. Em outras palavras, **usar AIC já é, de certa forma, fazer LOOCV — só que de graça, analiticamente**.
 
 ::: {.callout-tip}
@@ -533,36 +524,54 @@ flowchart LR
 4. **Não verifica diagnóstico** — pode retornar um modelo cujos resíduos ainda têm autocorrelação. Sempre cheque o Ljung-Box.
 :::
 
-### Exemplo prático: `statsforecast` em Python
+### Exemplo prático: `AutoARIMA` na Selic
+
+Vamos aplicar `AutoARIMA` do `statsforecast` (Nixtla) à **taxa Selic mensal** (série 4189 no SGS/BCB) — uma série não-sazonal, ideal para ARIMA puro:
 
 ```{python}
-#| eval: false
+#| code-fold: true
+from bcb import sgs
 from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA, AutoETS
+from statsforecast.models import AutoARIMA
 
-# Preparar dados no formato esperado
-# Colunas: unique_id, ds (data), y (valor)
-df_sf = df.reset_index()
-df_sf.columns = ['ds', 'y']
-df_sf['unique_id'] = 'serie_1'
+# 1) Dados: Selic mensal (% a.a.)
+selic = sgs.get({'selic': 4189}, start='2003-01-01').rename_axis('ds').reset_index()
+selic['unique_id'] = 'selic'
+selic = selic.rename(columns={'selic': 'y'})[['unique_id', 'ds', 'y']]
 
-# Ajustar múltiplos modelos
-sf = StatsForecast(
-    models=[
-        AutoARIMA(season_length=12),
-        AutoETS(season_length=12),
-    ],
-    freq='MS',  # mensal, início do mês
-    n_jobs=1
-)
+# 2) AutoARIMA (sem sazonalidade: season_length=1)
+sf = StatsForecast(models=[AutoARIMA(season_length=1)], freq='MS', n_jobs=1)
+sf.fit(df=selic)
 
-# Previsão 12 meses à frente
-forecast = sf.forecast(df=df_sf, h=12, level=[80, 95])
+# 3) Modelo escolhido + coeficientes
+fitted = sf.fitted_[0, 0]
+print("Modelo selecionado:")
+print(fitted.model_['arma'])  # (p, q, P, Q, s, d, D)
+print(f"\nAICc: {fitted.model_['aicc']:.2f}")
+print(f"Ordem (p,d,q): ({fitted.model_['arma'][0]}, {fitted.model_['arma'][5]}, {fitted.model_['arma'][1]})")
+```
+
+```{python}
+#| code-fold: true
+import matplotlib.pyplot as plt
+
+# 4) Previsão 12 meses
+forecast = sf.forecast(df=selic, h=12, level=[80, 95])
+
+fig, ax = plt.subplots(figsize=(12, 4))
+ax.plot(selic['ds'], selic['y'], color='#5B5B5B', linewidth=0.8, label='Histórico')
+ax.plot(forecast['ds'], forecast['AutoARIMA'], color='#E50505', linewidth=2, label='AutoARIMA')
+ax.fill_between(forecast['ds'],
+                forecast['AutoARIMA-lo-95'], forecast['AutoARIMA-hi-95'],
+                alpha=0.15, color='#E50505', label='IC 95%')
+ax.set_title('Selic mensal — previsão com AutoARIMA')
+ax.set_ylabel('Selic (% a.a.)'); ax.legend(); ax.grid(alpha=0.3)
+plt.tight_layout(); plt.show()
 ```
 
 ::: {.callout-tip}
-## Dica: Interpretando o resultado do AutoARIMA
-Após o ajuste, inspecione qual modelo foi escolhido com `sf.fitted_[0, 0].model_`. Compare com sua análise visual de ACF/PACF — eles concordam? Se não, investigue por quê.
+## Interpretando o resultado
+Após o ajuste, inspecione qual modelo foi escolhido (o atributo `arma` retorna `(p, q, P, Q, s, d, D)`). Compare com sua análise visual de ACF/PACF — eles concordam? Se não, investigue por quê. Em séries de taxa de juros, é comum o `AutoARIMA` escolher algo próximo de ARIMA(1,1,1) — alta persistência + quebras estruturais (mudança de regime monetário).
 :::
 
 ## ARIMAX: Quando Há Variáveis Externas

@@ -1,8 +1,6 @@
 ---
-title: "Lab 5: Projeto Final"
+title: "Lab 4: Projeto Final — Office Hours"
 subtitle: "Notebook de referência e orientações para entrega"
-execute:
-  eval: false
 ---
 
 ::: {.objetivos}
@@ -68,7 +66,7 @@ INSPER_TURQUESA = '#3ACC9F'
 ```{python}
 # Baixar dados
 ativo = 'PETR4.SA'
-precos = yf.download(ativo, start='2018-01-01', auto_adjust=False)['Adj Close']
+precos = yf.download(ativo, start='2018-01-01', auto_adjust=False, progress=False)['Adj Close'].squeeze()
 retornos = np.log(precos / precos.shift(1)).dropna()
 
 # Ajustar GARCH(1,1) com t-Student
@@ -145,7 +143,7 @@ from statsmodels.tsa.stattools import coint
 
 # Testar cointegração entre dois bancos
 ativos_pair = ['ITUB4.SA', 'BBDC4.SA']
-precos_pair = yf.download(ativos_pair, start='2018-01-01', auto_adjust=False)['Adj Close'].dropna()
+precos_pair = yf.download(ativos_pair, start='2018-01-01', auto_adjust=False, progress=False)['Adj Close'].dropna()
 
 # Teste de Engle-Granger
 score, pvalue, _ = coint(precos_pair.iloc[:, 0], precos_pair.iloc[:, 1])
@@ -161,7 +159,7 @@ from statsmodels.regression.linear_model import OLS
 
 # Regressão para encontrar hedge ratio
 modelo_ols = OLS(precos_pair.iloc[:, 0], precos_pair.iloc[:, 1]).fit()
-hedge_ratio = modelo_ols.params[0]
+hedge_ratio = modelo_ols.params.iloc[0]
 spread = precos_pair.iloc[:, 0] - hedge_ratio * precos_pair.iloc[:, 1]
 
 # Z-score do spread

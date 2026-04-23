@@ -1,5 +1,5 @@
 ---
-title: "Aula 3: Previsão e Validação"
+title: "Aula 4: Previsão e Validação"
 subtitle: "Como avaliar modelos e evitar armadilhas"
 format:
   html:

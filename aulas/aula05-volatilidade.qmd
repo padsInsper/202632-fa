@@ -1,5 +1,5 @@
 ---
-title: "Aula 4: Volatilidade e Modelos GARCH"
+title: "Aula 5: Volatilidade e Modelos GARCH"
 subtitle: "Modelando o risco que muda ao longo do tempo"
 format:
   html:

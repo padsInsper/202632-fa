@@ -1,12 +1,12 @@
 ---
-title: "Tópicos Avançados"
+title: "CAPM e Otimização de Portfólios"
 subtitle: "Financial Analytics: PADS Insper 2026.2"
 author: "Programa Avançado de Data Science e Decisão"
 format:
   revealjs:
     theme: [default, ../assets/insper-theme.scss]
     logo: ../assets/img/logo-insper-branco.png
-    footer: "Financial Analytics: Aula 7"
+    footer: "Financial Analytics: Aula 6"
     slide-number: true
     transition: fade
     width: 1280
@@ -17,139 +17,114 @@ format:
     scrollable: true
 ---
 
-## Modelos VAR
+## CAPM
 
-Quando **múltiplas séries se influenciam mutuamente**:
+$$E[R_i] = R_f + \beta_i \cdot (E[R_m] - R_f)$$
 
-$$\mathbf{y}_t = \mathbf{c} + \boldsymbol{\Phi}_1 \mathbf{y}_{t-1} + \cdots + \boldsymbol{\Phi}_p \mathbf{y}_{t-p} + \boldsymbol{\varepsilon}_t$$
+Quanto de retorno um ativo **deve** oferecer dado seu risco?
 
-Exemplo: juros ↔ câmbio ↔ inflação
+| Parâmetro | Significado |
+|-----------|-------------|
+| $R_f$ | Taxa livre de risco (CDI) |
+| $\beta_i$ | Sensibilidade ao mercado |
+| $E[R_m] - R_f$ | Prêmio de risco |
 
-Cada variável depende do **próprio passado** + **passado das outras**.
+## Interpretando o Beta
 
-## Forma Reduzida vs. Estrutural
+$$\beta_i = \frac{\text{Cov}(R_i, R_m)}{\text{Var}(R_m)}$$
 
-VAR na forma reduzida **esconde** relações contemporâneas na matriz $\Sigma = \text{Cov}(\boldsymbol{\varepsilon}_t)$.
+| Beta | Significado | Exemplo |
+|------|-------------|---------|
+| $\beta = 0$ | Sem risco de mercado | CDI |
+| $\beta = 1$ | Move igual ao mercado | BOVA11 |
+| $\beta > 1$ | Mais volátil | Tech, small caps |
+| $\beta < 1$ | Menos volátil | Elétricas |
 
-**Decomposição de Cholesky**: $\Sigma = L G L^\top$ com $L$ triangular inferior.
+## Alpha de Jensen
 
-Pré-multiplicando por $L^{-1}$ obtemos a **forma estrutural** — $y_{2,t}$ passa a depender contemporaneamente de $y_{1,t}$.
+$$\alpha_i = R_i - [R_f + \beta_i (R_m - R_f)]$$
 
-A **ordem** das variáveis importa: ordene da mais exógena para a mais endógena.
+- $\alpha > 0$: gestor **gerou valor** além do risco
+- $\alpha = 0$: retorno consistente com risco
+- $\alpha < 0$: gestor **não compensou** o risco
 
-## Regressão Espúria
+## Decomposição do Risco
 
-Duas séries I(1) independentes → regressão produz $R^2$ alto e $t$-estatísticas enormes. Tudo **falso**.
+$$\underbrace{\sigma_i^2}_{\text{total}} = \underbrace{\beta_i^2 \sigma_m^2}_{\text{sistemático}} + \underbrace{\sigma^2(\varepsilon_i)}_{\text{idiossincrático}}$$
 
-[tylervigen.com/spurious-correlations](https://www.tylervigen.com/spurious-correlations): filmes de Nicolas Cage × afogamentos, queijo × enrosco em lençóis.
+- **Sistemático**: não diversificável, **remunerado** pelo mercado ($\beta$)
+- **Idiossincrático**: diversificável, **não remunerado**
 
-**Regra**: teste ADF antes. Se I(1), use diferenças ou teste cointegração.
+Portfólio com 20-30 ações já elimina a maior parte do idiossincrático.
 
-## Causalidade de Granger
+## Beta de um Portfólio
 
-> $X$ Granger-causa $Y$ se o passado de $X$ ajuda a prever $Y$ além do passado de $Y$ sozinho.
+$$\beta_p = \sum_{i=1}^{n} w_i\, \beta_i$$
+
+**Linear nos pesos**. Implicações práticas:
+
+- **Hedge**: vender $\beta_p \cdot W$ do índice futuro neutraliza o risco de mercado
+- **Alocação tática**: ajustar $\beta_p$ é ajustar exposição ao mercado
+- **Atribuição**: separa retorno de mercado vs. seleção de ativos
+
+## Security Market Line
+
+Ativos **acima** da SML: $\alpha > 0$ (subvalorizados)
+
+Ativos **abaixo** da SML: $\alpha < 0$ (sobrevalorizados)
+
+A SML é a reta: $E[R] = R_f + \beta \cdot \text{prêmio}$
+
+## Fronteira Eficiente de Markowitz
+
+$$\min_{\mathbf{w}} \quad \mathbf{w}^T \boldsymbol{\Sigma} \mathbf{w}$$
+$$\text{s.a.} \quad \mathbf{w}^T \boldsymbol{\mu} = \mu_{\text{alvo}}, \quad \mathbf{w}^T \mathbf{1} = 1$$
+
+**Ideia**: o risco do portfólio **não é** a média dos riscos — a diversificação reduz risco total.
+
+## O Poder da Diversificação
+
+- **Correlação alta** (0.9): pouco benefício
+- **Correlação baixa** (0.2): grande benefício
+- **Correlação negativa** (-0.5): benefício máximo
+
+Com $\rho = -1$ entre dois ativos: é possível **eliminar** todo o risco!
+
+## Restrições Práticas
+
+| Restrição | Motivação |
+|-----------|-----------|
+| $w_i \geq 0$ | Sem short selling |
+| $w_i \leq 30\%$ | Diversificação mínima |
+| Limite por setor | Concentração setorial |
+| Custos de transação | Realismo |
 
 ::: {.callout-warning}
-**Granger-causalidade ≠ causalidade real**
-
-É precedência temporal, não causa-efeito. Sorvete não causa afogamentos!
+Sem restrições, Markowitz frequentemente produz portfólios **extremos** (90% em 1 ativo) → "error maximization"
 :::
 
-## Funções de Resposta ao Impulso
+## Sharpe = Inclinação da CML
 
-*"Se a Selic subir 1% inesperadamente, qual o efeito no câmbio nos próximos 12 meses?"*
+**Capital Market Line**: reta que liga $R_f$ ao portfólio de mercado.
 
-A IRF mostra a **dinâmica** da propagação de choques entre variáveis.
+$$E[R_p] = R_f + \underbrace{\frac{E[R_m] - R_f}{\sigma_m}}_{\text{Sharpe do mercado}} \cdot \sigma_p$$
 
-## Correlação vs. Cointegração
+- A inclinação da CML **é** o Sharpe ratio
+- O portfólio **tangente** à fronteira eficiente **maximiza** o Sharpe
+- Todos os portfólios na CML dominam qualquer portfólio abaixo dela
 
-| Conceito | O que mede | Propriedade |
-|----------|-----------|-------------|
-| **Correlação** | Co-movimento curto prazo | Pode ser espúria |
-| **Cointegração** | Equilíbrio longo prazo | Implica reversão à média |
+É por isso que o Sharpe é o indicador de performance número 1.
 
-Duas séries I(1) **cointegradas**: divergem no curto prazo, mas **voltam ao equilíbrio**.
+## Indicadores de Performance
 
-$$y_t - \beta x_t \sim I(0)$$
+| Indicador | Fórmula | O que mede |
+|-----------|---------|------------|
+| **Sharpe** | $(R_p - R_f) / \sigma_p$ | Retorno/risco total |
+| **Sortino** | $(R_p - R_f) / \sigma_{\text{down}}$ | Retorno/risco negativo |
+| **Max Drawdown** | Maior queda do pico | Pior cenário |
 
-## Testes de Cointegração
+## Próximos Passos
 
-### Engle-Granger (2 variáveis)
-1. Regrida $y_t = \alpha + \beta x_t + e_t$
-2. Teste se $\hat{e}_t$ é estacionário (ADF)
-
-### Johansen (múltiplas variáveis)
-- Testa o **rank de cointegração**
-- Quantas relações de equilíbrio existem?
-
-## VECM: Modelo de Correção de Erros
-
-Séries cointegradas $\Rightarrow$ use **VECM**, não VAR:
-
-$$\Delta \mathbf{P}_t = \boldsymbol\alpha\, \boldsymbol\beta^\top \mathbf{P}_{t-1} + A\, \Delta \mathbf{P}_{t-1} + \boldsymbol{\varepsilon}_t$$
-
-- $\boldsymbol\beta = (1, -\beta)^\top$: **vetor de cointegração** (equilíbrio de longo prazo)
-- $\boldsymbol\alpha$: **velocidades de ajustamento** (mola que puxa para o equilíbrio)
-- $A$: dinâmica de curto prazo
-
-Quando o spread sai do equilíbrio, o termo $\boldsymbol\alpha\, \boldsymbol\beta^\top \mathbf{P}_{t-1}$ força o retorno.
-
-## Pair Trading: Engle-Granger em 2 passos
-
-1. Regredir $Y_t = \mu + \theta X_t + z_t$ por OLS
-2. ADF em $\hat z_t$: se estacionário, cointegrados
-
-**Vetor de pesos do spread**:
-
-$$\mathbf{w} = (1, -\hat\theta)^\top, \qquad s_t = Y_t - \hat\theta X_t$$
-
-Para cada **1 long em $Y$**, **$\hat\theta$ short em $X$** — esse é o hedge correto.
-
-## Pair Trading
-
-```{mermaid}
-flowchart LR
-    A["Seleção de Pares"] --> B["Calcular Spread"]
-    B --> C["Z-score"]
-    C --> D["Sinais"]
-    D --> E["Fechar Posição"]
-```
-
-| Sinal | Z-score | Ação |
-|-------|---------|------|
-| Long spread | $z < -2$ | Comprar Y, vender X |
-| Short spread | $z > +2$ | Vender Y, comprar X |
-| Saída | $|z| < 0.5$ | Fechar posições |
-
-## Riscos do Pair Trading
-
-1. **Quebra da cointegração** (fusão, regulação)
-2. **Reversão lenta** (custo de carregamento)
-3. **Risco de execução** (liquidez)
-4. **Risco de modelo** (in-sample ≠ out-of-sample)
-
-## IA em Finanças
-
-| Abordagem | Uso | Cuidados |
-|-----------|-----|----------|
-| LLMs | Sentimento, notícias | Não preveem preços |
-| XGBoost | Fatores, features | Overfitting |
-| LSTM | Séries complexas | Caixa-preta |
-| RL | Trading auto | Instável |
-
-::: {.callout-important}
-GARCH com 3 parâmetros frequentemente supera redes neurais com milhares para previsão de volatilidade.
-:::
-
-## Encerramento
-
-**O que aprendemos neste curso:**
-
-1. Séries temporais: decomposição, ARIMA, previsão
-2. Finanças: GARCH, VaR, CAPM, Markowitz
-3. Pensamento crítico > código
-4. Entender o **porquê** > previsão com 0.1% a mais
-
-::: {.callout-tip}
-Os fatos estilizados existem independentemente do modelo. Entender o fenômeno é mais importante que otimizar acurácia.
-:::
+1. **Lab 4**: construir fronteira eficiente em Python
+2. **Competição de Portfólios**: monte sua carteira!
+3. **Aula 7**: tópicos avançados (VAR, cointegração, pair trading)
