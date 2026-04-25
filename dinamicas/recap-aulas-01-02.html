@@ -149,6 +149,45 @@
   .visual h4 { margin: 4px 8px; font-size: 13px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
   .visual canvas { width: 100%; height: 100%; display: block; }
 
+  /* Tabela de AIC (visual de algumas perguntas) */
+  .aic-table-wrap {
+    display: grid; grid-template-rows: 1fr auto; gap: 14px;
+    height: 100%; padding: 10px 6px 4px;
+  }
+  table.aic-table {
+    width: 100%; border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(15px, 1.3vw, 19px);
+  }
+  table.aic-table th, table.aic-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  table.aic-table th {
+    color: var(--muted); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px;
+  }
+  table.aic-table td:nth-child(2),
+  table.aic-table td:nth-child(3),
+  table.aic-table td:nth-child(4),
+  table.aic-table th:nth-child(2),
+  table.aic-table th:nth-child(3),
+  table.aic-table th:nth-child(4) {
+    text-align: right;
+  }
+  table.aic-table tr.winner td {
+    background: linear-gradient(90deg, rgba(6,214,160,0.16), rgba(6,214,160,0.02));
+    color: var(--accent-2); font-weight: 600;
+  }
+  table.aic-table tr.trap td {
+    background: linear-gradient(90deg, rgba(239,71,111,0.14), rgba(239,71,111,0.02));
+    color: #ffb3c5;
+  }
+  .aic-note {
+    font-size: 13px; color: var(--muted); padding: 0 8px;
+    line-height: 1.5;
+  }
+
   .options { display: grid; gap: 12px; align-content: start; }
   .opt {
     position: relative; overflow: hidden;
@@ -707,32 +746,33 @@ Q.push({
 });
 
 Q.push({
-  id: "q15", level: 4, kind: "Múltipla escolha · invertibilidade",
-  title: "Sobre a <em>invertibilidade</em> de um $\\mathrm{MA}(1)$: $Y_t = \\varepsilon_t + \\theta\\,\\varepsilon_{t-1}$",
-  type: "mc",
+  id: "q15", level: 4, kind: "Aplicada · seleção de modelo",
+  title: "Você ajustou 4 modelos $\\mathrm{ARIMA}$ à mesma série (todos com $d=1$, mesma amostra). AICs abaixo. Qual modelo escolher?",
+  type: "mc", visual: "aicTable1",
   options: [
-    "Toda $\\mathrm{MA}(1)$ é invertível por construção",
-    "É invertível se $|\\theta|<1$; importa para representar como $\\mathrm{AR}(\\infty)$ e ter previsão estável",
-    "Invertibilidade é o mesmo que estacionariedade",
-    "Só importa se houver sazonalidade"
+    "$\\mathrm{ARIMA}(2,1,2)$ — mais flexível, capta dinâmicas mais ricas",
+    "$\\mathrm{ARIMA}(1,1,1)$ — menor AIC entre os candidatos",
+    "$\\mathrm{ARIMA}(0,1,1)$ — preferir o mais parcimonioso por princípio",
+    "Empate técnico — qualquer um serve"
   ],
   correct: 1,
-  explain: "<b>$|\\theta|<1$.</b> MA é sempre estacionário (soma finita de white noise), mas só invertível se as raízes de $1+\\theta z=0$ ficam fora do círculo unitário. Sem invertibilidade, dois MAs distintos têm a mesma ACF — modelo não identificável."
+  explain: "<b>$\\mathrm{ARIMA}(1,1,1)$.</b> Com $d$ fixo (mesma variável dependente, mesma amostra), AIC <i>é</i> diretamente comparável: escolha o menor. Aqui $\\Delta\\mathrm{AIC}>2$ versus os demais — diferença substantiva (regra de Burnham-Anderson). Parcimônia já está embutida na penalidade $2k$ do AIC."
 });
 
 Q.push({
-  id: "q16", level: 4, kind: "Final · fundamento teórico",
-  title: "Sobre o <em>Teorema da Decomposição de Wold</em>, qual afirmação é verdadeira?",
-  type: "mc",
+  id: "q16", level: 4, kind: "Final · pegadinha econométrica",
+  title: "Você compara $\\mathrm{ARIMA}(1,0,1)$ (sem diferenciar) com $\\mathrm{ARIMA}(1,1,1)$ (com $d=1$) na mesma série, e o segundo dá AIC <em>muito</em> menor. Você conclui que…",
+  type: "mc", visual: "aicTable2",
   options: [
-    "Toda série temporal pode ser modelada como $\\mathrm{AR}(p)$ finito",
-    "Todo processo estacionário em covariância admite uma representação $\\mathrm{MA}(\\infty)$ (parte determinística + parte estocástica linear)",
-    "É um teste estatístico para detectar sazonalidade",
-    "É equivalente ao teste de Ljung-Box"
+    "$\\mathrm{ARIMA}(1,1,1)$ é claramente superior — pode escolher direto",
+    "AIC entre modelos com $d$ diferentes <em>não</em> é comparável; defina $d$ por testes (ADF/KPSS) primeiro, depois compare $(p,q)$ com $d$ fixo",
+    "Tira a média ponderada dos dois AICs",
+    "BIC resolveria — ele é imune a esse problema"
   ],
   correct: 1,
-  explain: "<b>Wold (1938).</b> Todo processo fracamente estacionário decompõe-se como soma de um componente determinístico + um $\\mathrm{MA}(\\infty)$ com inovações white noise. É a justificativa teórica de por que ARMA é tão geral."
+  explain: "<b>Pegadinha clássica.</b> $\\mathrm{ARIMA}(p,0,q)$ modela $Y_t$; $\\mathrm{ARIMA}(p,1,q)$ modela $\\Delta Y_t$ — variáveis dependentes <i>diferentes</i> e amostras de tamanhos diferentes ($n$ vs $n-d$). A log-verossimilhança é calculada sobre escalas distintas. Comparar AIC entre eles é como comparar AIC de modelos em $Y$ vs $\\log Y$: numericamente possível, semanticamente sem sentido. <b>BIC sofre do mesmo problema</b> (mesma log-verossimilhança). Procedimento correto: ADF/KPSS para fixar $d$ → comparar $(p,q)$ via AIC/BIC."
 });
+
 
 // ============================================================================
 // VOTER PAGE
@@ -1070,6 +1110,36 @@ function initProjection() {
         plotACF(document.getElementById("acfC"), acf.slice(1), { n: 200, color: "#ffd166" });
         plotACF(document.getElementById("pacfC"), pacf.slice(1), { n: 200, color: "#06d6a0" });
       });
+    } else if (kind === "aicTable1") {
+      host.innerHTML = `<h4>Saída do auto.arima — mesma série, $d=1$ fixo</h4>
+        <div class="aic-table-wrap">
+          <table class="aic-table">
+            <thead><tr><th>Modelo</th><th>AIC</th><th>ΔAIC</th><th>k</th></tr></thead>
+            <tbody>
+              <tr><td>ARIMA(1,1,0)</td><td>528.4</td><td>+8.7</td><td>2</td></tr>
+              <tr><td>ARIMA(0,1,1)</td><td>524.9</td><td>+5.2</td><td>2</td></tr>
+              <tr class="winner"><td>ARIMA(1,1,1)</td><td><b>519.7</b></td><td>—</td><td>3</td></tr>
+              <tr><td>ARIMA(2,1,2)</td><td>522.3</td><td>+2.6</td><td>5</td></tr>
+            </tbody>
+          </table>
+          <div class="aic-note">$\\mathrm{AIC} = -2\\ell + 2k$ &nbsp;·&nbsp; menor é melhor &nbsp;·&nbsp; $\\Delta\\mathrm{AIC}<2$ ≈ equivalentes (Burnham &amp; Anderson)</div>
+        </div>`;
+      requestAnimationFrame(() => typeset(host));
+    } else if (kind === "aicTable2") {
+      host.innerHTML = `<h4>Comparação cruzada — atenção ao $d$</h4>
+        <div class="aic-table-wrap">
+          <table class="aic-table">
+            <thead><tr><th>Modelo</th><th>$d$</th><th>n efetivo</th><th>AIC</th></tr></thead>
+            <tbody>
+              <tr><td>ARIMA(1,0,1)</td><td>0</td><td>200</td><td>1842.5</td></tr>
+              <tr><td>ARIMA(2,0,1)</td><td>0</td><td>200</td><td>1839.1</td></tr>
+              <tr class="trap"><td>ARIMA(1,1,1)</td><td>1</td><td>199</td><td><b>521.3</b></td></tr>
+              <tr class="trap"><td>ARIMA(0,1,1)</td><td>1</td><td>199</td><td>523.8</td></tr>
+            </tbody>
+          </table>
+          <div class="aic-note" style="color: var(--danger)">⚠ $d$ diferente ⇒ variável dependente diferente ($Y_t$ vs $\\Delta Y_t$) ⇒ log-verossimilhanças <i>não</i> são comparáveis.</div>
+        </div>`;
+      requestAnimationFrame(() => typeset(host));
     }
   }
 
@@ -1125,7 +1195,7 @@ function initProjection() {
     wrap.innerHTML = `
       <div class="hint">Recap completo</div>
       <h2>Bom trabalho! 🎯</h2>
-      <p>Vocês acabaram de revisar fundamentos, ACF/PACF, estacionariedade, ADF/KPSS, AR/MA/ARIMA, invertibilidade e Wold. Pronto para SARIMA, Prophet e previsão.</p>
+      <p>Vocês acabaram de revisar fundamentos, ACF/PACF, estacionariedade, ADF/KPSS, AR/MA/ARIMA e seleção via AIC. Pronto para SARIMA, Prophet e previsão.</p>
       <div class="hint"><kbd>←</kbd> volta · <kbd>R</kbd> reinicia</div>
     `;
     content.appendChild(wrap);

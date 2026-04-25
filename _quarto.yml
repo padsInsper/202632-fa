@@ -1,6 +1,8 @@
 project:
   type: website
   output-dir: _site
+  resources:
+    - "dinamicas/recap-aulas-01-02.html"
 
 website:
   title: "Financial Analytics: PADS"
