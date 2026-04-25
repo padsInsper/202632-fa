@@ -211,6 +211,6 @@ Quando a série tem **ruído alto** ou poucos anos, o Prophet pode identificar c
 
 ## Para Saber Mais
 
-- [FPP3, Cap. 9: ARIMA Models — Seasonal ARIMA](https://otexts.com/fpppy/seasonal-arima.html)
+- [FPP3, Cap. 9: ARIMA Models — Seasonal ARIMA](https://otexts.com/fpppy/09-arima.html)
 - Taylor & Letham (2017). *Forecasting at Scale* — paper do Prophet.
 - Documentação do [Prophet](https://facebook.github.io/prophet/) e [statsforecast](https://nixtlaverse.nixtla.io/statsforecast/).

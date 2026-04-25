@@ -774,7 +774,7 @@ O modelo AR assume estacionariedade (média constante). Com tendência, a média
 
 ## Para Saber Mais
 
-- [FPP3, Cap. 2: Time Series Graphics](https://otexts.com/fpppy/tsintro.html)
-- [FPP3, Cap. 3: Time Series Decomposition](https://otexts.com/fpppy/decomposition.html)
-- [FPP3, Cap. 9.1: Stationarity and differencing](https://otexts.com/fpppy/arima.html)
+- [FPP3, Cap. 2: Time Series Graphics](https://otexts.com/fpppy/02-graphics.html)
+- [FPP3, Cap. 3: Time Series Decomposition](https://otexts.com/fpppy/03-decomposition.html)
+- [FPP3, Cap. 9.1: Stationarity and differencing](https://otexts.com/fpppy/09-arima.html)
 - Hamilton, J.D. (1994). *Time Series Analysis*, Cap. 15 — Unit Roots.

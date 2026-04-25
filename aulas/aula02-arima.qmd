@@ -638,6 +638,6 @@ Regra prática: diferenças de AICc menores que 2 são "empate"; entre 2-10 há 
 
 ## Para Saber Mais
 
-- [FPP3, Cap. 9: ARIMA Models](https://otexts.com/fpppy/arima.html)
+- [FPP3, Cap. 9: ARIMA Models](https://otexts.com/fpppy/09-arima.html)
 - Box, G.E.P., Jenkins, G.M., Reinsel, G.C., & Ljung, G.M. (2015). *Time Series Analysis: Forecasting and Control*. 5th ed. Wiley.
 - Enders, W. (2014). *Applied Econometric Time Series*. 4th ed. Wiley. — Capítulos 2-4 são excelentes.
