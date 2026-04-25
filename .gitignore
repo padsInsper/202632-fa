@@ -12,7 +12,8 @@ _ref_microbook/
 
 /.quarto/
 **/*.quarto_ipynb
-dinamicas/
+dinamicas/*
+!dinamicas/recap-aulas-01-02.html
 manual_marca/
 
 # Dados do professor (gabarito do trabalho intermediário)

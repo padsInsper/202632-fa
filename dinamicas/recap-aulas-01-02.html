@@ -1,0 +1,1203 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Recap Aulas 1 e 2 — Séries Temporais (FA · PADS Insper)</title>
+
+<!-- KaTeX para matemática -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+<!-- Firebase (compat para uso simples em <script>) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+
+<style>
+  :root {
+    --bg-0: #0b1020;
+    --bg-1: #131a35;
+    --bg-2: #1d2750;
+    --fg: #f4f6fb;
+    --muted: #97a3c4;
+    --accent: #ffd166;
+    --accent-2: #06d6a0;
+    --danger: #ef476f;
+    --insper: #e50505;
+    --card: rgba(255,255,255,0.04);
+    --card-border: rgba(255,255,255,0.08);
+    --shadow: 0 30px 80px rgba(0,0,0,0.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    color: var(--fg);
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(229,5,5,0.18), transparent 60%),
+      radial-gradient(900px 500px at 110% 110%, rgba(6,214,160,0.12), transparent 60%),
+      linear-gradient(180deg, #0a0f22 0%, #0b1020 100%);
+    overflow: hidden;
+  }
+  body.voter { overflow: auto; user-select: none; }
+  body.projection { overflow: hidden; user-select: none; }
+
+  .stage {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 24px 44px 18px;
+  }
+
+  /* TOP BAR */
+  .top {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 24px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 14px;
+    color: var(--muted); font-size: 14px; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .brand .dot { width: 10px; height: 10px; border-radius: 50%;
+    background: var(--insper); box-shadow: 0 0 16px rgba(229,5,5,0.7); }
+
+  .level-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 999px;
+    font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    transition: all 400ms ease;
+  }
+  .level-badge[data-level="1"] { background: rgba(6,214,160,0.12); border: 1px solid rgba(6,214,160,0.4); color: var(--accent-2); }
+  .level-badge[data-level="2"] { background: rgba(255,209,102,0.12); border: 1px solid rgba(255,209,102,0.4); color: var(--accent); }
+  .level-badge[data-level="3"] { background: rgba(255,140,0,0.16); border: 1px solid rgba(255,140,0,0.45); color: #ff9a3c; }
+  .level-badge[data-level="4"] { background: rgba(239,71,111,0.18); border: 1px solid rgba(239,71,111,0.5); color: #ff5e85; }
+
+  .progress-wrap {
+    flex: 1; height: 6px; max-width: 420px; margin: 0 24px;
+    border-radius: 999px; background: rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent), #ff9a3c, var(--danger));
+    transition: width 600ms cubic-bezier(0.16,1,0.3,1);
+  }
+
+  .counter { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 14px; }
+
+  .vote-status {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--muted); font-size: 13px; padding: 6px 12px;
+    border-radius: 999px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .vote-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .vote-status.online .dot { background: var(--accent-2); box-shadow: 0 0 8px rgba(6,214,160,0.6); animation: pulse 2s infinite; }
+  .vote-status.locked .dot { background: var(--danger); }
+
+  /* MAIN STAGE */
+  .panel {
+    align-self: stretch;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 22px;
+    padding-top: 8px;
+    min-height: 0;
+  }
+
+  .qhead { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  .qkind {
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .qnum {
+    font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .qtitle {
+    margin: 0;
+    font-size: clamp(26px, 3.1vw, 42px);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  .qtitle em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--accent), #ff9a3c);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .katex { font-size: 1.05em; }
+
+  .qbody { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: stretch; min-height: 0; }
+  .qbody.has-visual { grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.1fr); }
+
+  .visual {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 18px; padding: 14px;
+    display: grid; grid-template-rows: auto 1fr; gap: 6px;
+    box-shadow: var(--shadow);
+    min-height: 0;
+  }
+  .visual h4 { margin: 4px 8px; font-size: 13px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+  .visual canvas { width: 100%; height: 100%; display: block; }
+
+  .options { display: grid; gap: 12px; align-content: start; }
+  .opt {
+    position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 44px 1fr auto; gap: 16px; align-items: center;
+    padding: 16px 22px;
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 14px;
+    font-size: clamp(16px, 1.4vw, 20px);
+    line-height: 1.35;
+    transition: border-color 250ms ease, transform 250ms ease;
+  }
+  .opt .vbar {
+    position: absolute; inset: 0; right: auto;
+    background: linear-gradient(90deg, rgba(151,163,196,0.18), rgba(151,163,196,0.06));
+    width: 0%;
+    transition: width 500ms cubic-bezier(0.16,1,0.3,1);
+    z-index: 0; pointer-events: none;
+  }
+  .opt > * { position: relative; z-index: 1; }
+  .opt .key {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    font-weight: 700; font-size: 16px; color: var(--muted);
+  }
+  .opt .vcount {
+    color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums;
+    min-width: 60px; text-align: right;
+    opacity: 0; transition: opacity 200ms ease;
+  }
+  .opt .vcount.show { opacity: 1; }
+  .opt.correct {
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 1px rgba(6,214,160,0.4), 0 20px 50px rgba(6,214,160,0.18);
+  }
+  .opt.correct .vbar { background: linear-gradient(90deg, rgba(6,214,160,0.32), rgba(6,214,160,0.10)); }
+  .opt.correct .key { background: var(--accent-2); color: #08221a; border-color: transparent; }
+  .opt.wrong { opacity: 0.65; border-color: rgba(239,71,111,0.3); }
+  .opt.wrong .vbar { background: linear-gradient(90deg, rgba(239,71,111,0.22), rgba(239,71,111,0.05)); }
+
+  .options.tf { grid-template-columns: 1fr 1fr; gap: 18px; }
+  .options.tf .opt {
+    justify-items: center; padding: 28px 18px;
+    grid-template-columns: 1fr; text-align: center;
+    font-size: clamp(24px, 2.6vw, 36px); font-weight: 700;
+  }
+  .options.tf .opt .key { display: none; }
+  .options.tf .opt .vcount { position: absolute; bottom: 10px; right: 14px; min-width: 0; }
+  .options.tf .opt .lbl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .options.tf .opt .icon { font-size: 50px; line-height: 1; }
+
+  /* COVER */
+  .cover, .end {
+    text-align: center;
+    display: grid; place-content: center; gap: 24px;
+    height: 100%;
+  }
+  .cover h1 {
+    font-size: clamp(44px, 6.5vw, 88px); margin: 0; line-height: 0.98;
+    letter-spacing: -0.02em;
+  }
+  .cover h1 span {
+    background: linear-gradient(90deg, var(--accent), #ff9a3c, var(--insper));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .cover .sub { color: var(--muted); font-size: 20px; max-width: 760px; margin: 0 auto; line-height: 1.5; }
+  .cover .hint { font-size: 13px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.85; }
+  .cover kbd, .end kbd, .hint kbd, .bottom kbd {
+    display: inline-block; padding: 3px 8px; border-radius: 6px;
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; color: var(--fg); letter-spacing: normal;
+  }
+
+  .cover-vote {
+    margin-top: 8px;
+    display: inline-flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 22px 28px;
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+  }
+  .cover-vote .qrbox { background: white; padding: 14px; border-radius: 12px; }
+  .cover-vote .qrbox img { display: block; width: 220px; height: 220px; }
+  .cover-vote .url-line { font-family: ui-monospace, monospace; color: var(--accent); font-size: 16px; word-break: break-all; max-width: 400px; }
+  .cover-vote .label { font-size: 13px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  .roadmap { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+  .roadmap .chip {
+    padding: 8px 14px; border-radius: 999px; font-size: 13px; letter-spacing: 0.06em;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+  }
+  .roadmap .chip b { color: var(--fg); font-weight: 700; margin-right: 8px; }
+
+  /* EXPLAIN */
+  .explain {
+    margin-top: 14px;
+    padding: 16px 20px;
+    background: linear-gradient(180deg, rgba(255,209,102,0.08), rgba(255,209,102,0.02));
+    border: 1px solid rgba(255,209,102,0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: 12px;
+    color: #ffe8b3;
+    font-size: 16px; line-height: 1.5;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 350ms ease, transform 350ms ease;
+    max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-width: 0;
+  }
+  .explain.show { opacity: 1; transform: translateY(0); max-height: 360px; padding: 16px 20px; margin-top: 14px; border-width: 1px; border-left-width: 3px; }
+  .explain b { color: var(--accent); }
+
+  /* QR sidecar (always visible during questions, small) */
+  .qr-mini {
+    position: fixed; right: 20px; bottom: 60px;
+    background: white; padding: 8px; border-radius: 10px;
+    box-shadow: var(--shadow); z-index: 50;
+    cursor: pointer;
+    transition: transform 200ms ease;
+  }
+  .qr-mini:hover { transform: scale(1.05); }
+  .qr-mini img { display: block; width: 92px; height: 92px; }
+  .qr-mini .label {
+    position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: var(--muted); white-space: nowrap;
+  }
+
+  /* QR overlay (full screen for in-person mode) */
+  .qr-overlay {
+    position: fixed; inset: 0;
+    background: rgba(8,12,28,0.96);
+    display: none; place-items: center;
+    z-index: 1000; padding: 40px;
+  }
+  .qr-overlay.show { display: grid; }
+  .qr-overlay .qr-card {
+    text-align: center;
+    background: white; padding: 36px;
+    border-radius: 24px;
+    color: #0b1020;
+  }
+  .qr-overlay img { width: min(60vmin, 480px); height: min(60vmin, 480px); display: block; margin: 0 auto 20px; }
+  .qr-overlay .url { font-family: ui-monospace, monospace; font-size: 22px; color: #0b1020; margin: 12px 0; word-break: break-all; }
+  .qr-overlay .hint { color: #4b5772; letter-spacing: 0.1em; text-transform: uppercase; font-size: 14px; }
+
+  /* BOTTOM */
+  .bottom {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--muted); font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 12px;
+  }
+  .controls { display: flex; gap: 14px; flex-wrap: wrap; }
+
+  .end h2 { font-size: clamp(40px, 5vw, 72px); margin: 0; }
+  .end p { color: var(--muted); font-size: 20px; max-width: 720px; margin: 0 auto; line-height: 1.5; }
+
+  .fade-enter { animation: fadein 360ms ease both; }
+  @keyframes fadein {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.5 } 50% { opacity: 1 } }
+
+  /* ============================ VOTER PAGE ============================ */
+  body.voter { background: linear-gradient(180deg, #0b1020 0%, #131a35 100%); }
+  .voter-shell {
+    min-height: 100vh; padding: 24px 18px 40px;
+    display: flex; flex-direction: column; gap: 20px;
+    max-width: 560px; margin: 0 auto;
+  }
+  .voter-shell .header { text-align: center; padding: 8px 0; color: var(--muted); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .voter-shell h2 { font-size: 22px; margin: 0; line-height: 1.3; }
+  .voter-shell .subtle { color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .voter-shell .qcard {
+    background: var(--card); border: 1px solid var(--card-border);
+    padding: 20px; border-radius: 16px;
+  }
+  .voter-shell .opts { display: grid; gap: 12px; }
+  .voter-shell button.opt {
+    appearance: none; -webkit-tap-highlight-color: transparent;
+    width: 100%; text-align: left; cursor: pointer; color: var(--fg);
+    font-family: inherit; font-size: 17px; line-height: 1.35;
+    padding: 18px 20px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    display: flex; align-items: center; gap: 14px;
+    transition: transform 100ms ease, background 200ms ease;
+  }
+  .voter-shell button.opt:active { transform: scale(0.98); }
+  .voter-shell button.opt[aria-pressed="true"] {
+    background: rgba(6,214,160,0.18); border-color: var(--accent-2);
+    box-shadow: 0 0 0 1px rgba(6,214,160,0.5);
+  }
+  .voter-shell button.opt .key {
+    width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+    background: rgba(255,255,255,0.08); display: grid; place-items: center;
+    font-weight: 700; color: var(--muted);
+  }
+  .voter-shell button.opt[aria-pressed="true"] .key { background: var(--accent-2); color: #08221a; }
+  .voter-shell button.opt:disabled { opacity: 0.55; cursor: not-allowed; }
+  .voter-shell .toast {
+    margin-top: 6px; padding: 12px 14px; border-radius: 10px;
+    background: rgba(6,214,160,0.1); border: 1px solid rgba(6,214,160,0.3);
+    color: var(--accent-2); font-size: 14px; text-align: center;
+  }
+  .voter-shell .toast.locked { background: rgba(239,71,111,0.1); border-color: rgba(239,71,111,0.3); color: var(--danger); }
+  .voter-shell .waiting {
+    text-align: center; padding: 40px 20px;
+    color: var(--muted); font-size: 15px; line-height: 1.6;
+  }
+  .voter-shell .footer-tag {
+    text-align: center; padding-top: 20px; color: var(--muted); font-size: 12px;
+  }
+
+  @media (max-width: 900px) {
+    .qbody.has-visual { grid-template-columns: 1fr; }
+    .stage { padding: 18px 22px; }
+    .qr-mini { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Conteúdo gerado dinamicamente: projeção ou voter -->
+<div id="root"></div>
+
+<!-- Overlay de QR fullscreen -->
+<div class="qr-overlay" id="qrOverlay" onclick="this.classList.remove('show')">
+  <div class="qr-card" onclick="event.stopPropagation()">
+    <img id="qrOverlayImg" alt="QR Code"/>
+    <div class="hint">Vote pelo seu celular</div>
+    <div class="url" id="qrOverlayUrl"></div>
+    <div class="hint" style="margin-top:12px">Toque fora para fechar · <kbd>Q</kbd> alterna</div>
+  </div>
+</div>
+
+<script>
+/* =============================================================================
+ * Recap Aulas 01 e 02 — quiz com votação real via Firebase
+ *
+ * COMO ATIVAR VOTAÇÃO REAL DOS ALUNOS:
+ * 1. Acesse https://console.firebase.google.com → Add project (qualquer nome)
+ * 2. Build → Realtime Database → Create database → start in TEST MODE
+ * 3. Project Settings (engrenagem) → General → "Your apps" → Web (</>)
+ * 4. Registre o app, copie a `databaseURL` (algo como
+ *    https://SEU-PROJETO-default-rtdb.firebaseio.com)
+ * 5. Cole abaixo em FIREBASE_CONFIG.databaseURL e faça commit/push.
+ *
+ * Sem isso, o app funciona em modo TALLY MANUAL (aperte 1-4 conforme votos
+ * vão chegando no chat).
+ * ===========================================================================*/
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDb6koJJDK-Irm4kuS8baEsDMQrGF1h1d4",
+  authDomain: "labdados-4cc29.firebaseapp.com",
+  projectId: "labdados-4cc29",
+  // Se a região do RTDB for outra, ajuste para
+  // https://labdados-4cc29-default-rtdb.<region>.firebasedatabase.app
+  databaseURL: "https://labdados-4cc29-default-rtdb.firebaseio.com"
+};
+
+const SESSION_ID = new URLSearchParams(location.search).get("s") || "default";
+const IS_VOTER = new URLSearchParams(location.search).get("vote") === "1";
+
+const useFirebase = FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.length > 12;
+let db = null;
+if (useFirebase) {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+  } catch (e) {
+    console.error("Firebase init falhou:", e);
+  }
+}
+
+// ===== KaTeX render helper ===================================================
+function typeset(node) {
+  if (!window.renderMathInElement) return;
+  try {
+    renderMathInElement(node || document.body, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true }
+      ],
+      throwOnError: false
+    });
+  } catch (e) {}
+}
+// Re-tenta tipografar quando KaTeX terminar de carregar
+window.addEventListener("load", () => setTimeout(() => typeset(), 50));
+
+// ===== random / canvas helpers ==============================================
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rng) {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function whiteNoise(n, seed = 1) {
+  const r = mulberry32(seed); const a = [];
+  for (let i = 0; i < n; i++) a.push(gauss(r));
+  return a;
+}
+function randomWalk(n, seed = 2) {
+  const r = mulberry32(seed); let s = 0; const a = [];
+  for (let i = 0; i < n; i++) { s += gauss(r); a.push(s); }
+  return a;
+}
+function trendSeries(n, slope = 0.05, seed = 3) {
+  const r = mulberry32(seed); const a = [];
+  for (let i = 0; i < n; i++) a.push(slope * i + gauss(r) * 0.8);
+  return a;
+}
+function seasonalSeries(n, period = 24, amp = 2, seed = 4) {
+  const r = mulberry32(seed); const a = [];
+  for (let i = 0; i < n; i++)
+    a.push(amp * Math.sin((2 * Math.PI * i) / period) + gauss(r) * 0.4);
+  return a;
+}
+
+function plotSeries(canvas, data, opts = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  if (cssW < 4 || cssH < 4) return;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+  const pad = { l: 28, r: 14, t: 14, b: 22 };
+  const w = cssW - pad.l - pad.r;
+  const h = cssH - pad.t - pad.b;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const x = i => pad.l + (i / (data.length - 1)) * w;
+  const y = v => pad.t + h - ((v - min) / range) * h;
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + h);
+  ctx.lineTo(pad.l + w, pad.t + h); ctx.stroke();
+  if (min < 0 && max > 0) {
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.l, y(0)); ctx.lineTo(pad.l + w, y(0)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = opts.color || "#ffd166";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  data.forEach((v, i) => { if (i === 0) ctx.moveTo(x(i), y(v)); else ctx.lineTo(x(i), y(v)); });
+  ctx.stroke();
+}
+
+function plotACF(canvas, coeffs, opts = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+  if (cssW < 4 || cssH < 4) return;
+  canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+  const ctx = canvas.getContext("2d"); ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+  const pad = { l: 32, r: 14, t: 14, b: 26 };
+  const w = cssW - pad.l - pad.r, h = cssH - pad.t - pad.b;
+  const n = coeffs.length;
+  const x = i => pad.l + ((i + 0.5) / n) * w;
+  const y0 = pad.t + h / 2;
+  const yScale = (h / 2) * 0.92;
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(pad.l + w, y0); ctx.stroke();
+  const band = 1.96 / Math.sqrt(opts.n || 200);
+  ctx.strokeStyle = "rgba(6,214,160,0.6)"; ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(pad.l, y0 - band * yScale); ctx.lineTo(pad.l + w, y0 - band * yScale);
+  ctx.moveTo(pad.l, y0 + band * yScale); ctx.lineTo(pad.l + w, y0 + band * yScale);
+  ctx.stroke(); ctx.setLineDash([]);
+  const bw = Math.max(2, w / n - 4);
+  coeffs.forEach((c, i) => {
+    const cx = x(i);
+    const top = y0 - c * yScale;
+    ctx.fillStyle = Math.abs(c) > band ? (opts.color || "#ffd166") : "rgba(255,255,255,0.45)";
+    ctx.fillRect(cx - bw / 2, Math.min(y0, top), bw, Math.abs(c * yScale));
+  });
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "11px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  for (let i = 0; i < n; i += 2) ctx.fillText(String(i), x(i), pad.t + h + 14);
+  ctx.fillText(opts.label || "lag", pad.l + w / 2, pad.t + h + 22);
+}
+
+// ============================================================================
+// QUESTÕES (com $...$ para LaTeX)
+// ============================================================================
+const Q = [];
+
+// LEVEL 1 — aquecimento -------------------------------------------------------
+Q.push({
+  id: "q1", level: 1, kind: "Verdadeiro / Falso",
+  title: "Em séries temporais, embaralhar a ordem das observações <em>não</em> altera o significado dos dados.",
+  type: "tf", correct: 1,
+  explain: "<b>Falso.</b> Diferente de cross-section, em série temporal a ordem carrega a dinâmica. Embaralhar destrói tendência, sazonalidade e qualquer estrutura de autocorrelação."
+});
+
+Q.push({
+  id: "q2", level: 1, kind: "Verdadeiro / Falso",
+  title: "Ruído branco (white noise) é um processo <em>estacionário</em>.",
+  type: "tf", correct: 0,
+  explain: "<b>Verdadeiro.</b> White noise tem $E[\\varepsilon_t]=0$, $\\mathrm{Var}(\\varepsilon_t)=\\sigma^2$ constante e $\\mathrm{Cov}(\\varepsilon_t,\\varepsilon_{t-k})=0$ — atende à estacionariedade fraca."
+});
+
+Q.push({
+  id: "q3", level: 1, kind: "Verdadeiro / Falso",
+  title: "Um random walk $Y_t = Y_{t-1} + \\varepsilon_t$ <em>também</em> é estacionário.",
+  type: "tf", correct: 1,
+  explain: "<b>Falso.</b> $\\mathrm{Var}(Y_t)=t\\,\\sigma^2$ — a variância cresce linearmente com $t$. Por isso precisamos diferenciar antes de modelar."
+});
+
+Q.push({
+  id: "q4", level: 1, kind: "Múltipla escolha",
+  title: "Qual destes <em>não</em> é um componente clássico de uma série temporal?",
+  type: "mc",
+  options: ["Tendência", "Sazonalidade", "Polaridade", "Ciclo"],
+  correct: 2,
+  explain: "<b>Polaridade</b> não faz parte da decomposição clássica. Os componentes são tendência, sazonalidade (período fixo), ciclo (período variável) e ruído/resíduo."
+});
+
+// LEVEL 2 — intuição ---------------------------------------------------------
+Q.push({
+  id: "q5", level: 2, kind: "Identifique a série",
+  title: "Qual destes gráficos é um <em>random walk</em>?",
+  type: "mc", visual: "fourSeries",
+  options: ["Série A", "Série B", "Série C", "Série D"],
+  correct: 1,
+  explain: "<b>B</b> é o random walk: trajetória que vagueia sem retornar à média, sem período fixo. A: white noise. C: tendência linear + ruído. D: sazonalidade."
+});
+
+Q.push({
+  id: "q6", level: 2, kind: "Múltipla escolha",
+  title: "Para identificar a ordem $p$ de um $\\mathrm{AR}(p)$ puro, qual gráfico é mais informativo?",
+  type: "mc",
+  options: ["ACF (autocorrelação)", "PACF (autocorrelação parcial)", "Histograma dos resíduos", "Q-Q plot"],
+  correct: 1,
+  explain: "<b>PACF.</b> Em $\\mathrm{AR}(p)$ puro, a PACF corta abruptamente após o lag $p$, enquanto a ACF decai gradualmente. Em $\\mathrm{MA}(q)$ é o contrário."
+});
+
+Q.push({
+  id: "q7", level: 2, kind: "Múltipla escolha",
+  title: "No modelo $\\mathrm{ARIMA}(p,d,q)$, o que representa o $d$?",
+  type: "mc",
+  options: [
+    "Número de defasagens da parte AR",
+    "Número de diferenciações para tornar a série estacionária",
+    "Quantidade de outliers detectados",
+    "Grau de sazonalidade (período)"
+  ],
+  correct: 1,
+  explain: "<b>$d$ = ordem de integração</b> — quantas vezes diferenciamos a série até remover tendência estocástica. $\\mathrm{ARIMA}(p,d,q)$ = $\\mathrm{ARMA}(p,q)$ aplicado a $\\Delta^d Y_t$."
+});
+
+Q.push({
+  id: "q8", level: 2, kind: "Múltipla escolha",
+  title: "A metodologia clássica de modelagem de séries temporais é conhecida como…",
+  type: "mc",
+  options: ["Box-Cox", "Box-Jenkins", "Durbin-Watson", "Holt-Winters"],
+  correct: 1,
+  explain: "<b>Box-Jenkins</b>: identificação (ACF/PACF) → estimação → diagnóstico (resíduos) → previsão. Box-Cox é transformação; Durbin-Watson é teste; Holt-Winters é suavização."
+});
+
+// LEVEL 3 — pós-graduação ----------------------------------------------------
+Q.push({
+  id: "q9", level: 3, kind: "Múltipla escolha · estatística",
+  title: "No teste ADF (Dickey-Fuller aumentado), qual é a <em>hipótese nula</em>?",
+  type: "mc",
+  options: [
+    "A série é estacionária",
+    "A série tem raiz unitária (não-estacionária)",
+    "Os resíduos são normais",
+    "Existe sazonalidade"
+  ],
+  correct: 1,
+  explain: "<b>$H_0$: existe raiz unitária</b> (não-estacionária). Rejeitar $H_0$ (p-valor pequeno) ⇒ podemos assumir estacionariedade. É o oposto do KPSS."
+});
+
+Q.push({
+  id: "q10", level: 3, kind: "Múltipla escolha · álgebra",
+  title: "Para que um $\\mathrm{AR}(1)$ com $Y_t = \\phi\\,Y_{t-1} + \\varepsilon_t$ seja <em>estacionário em covariância</em>, precisamos…",
+  type: "mc",
+  options: ["$\\phi > 0$", "$\\phi = 1$", "$|\\phi| < 1$", "$\\phi < 0$"],
+  correct: 2,
+  explain: "<b>$|\\phi|<1$.</b> A raiz do polinômio característico $1-\\phi z=0$ é $z=1/\\phi$ — precisa estar fora do círculo unitário, $|1/\\phi|>1 \\iff |\\phi|<1$. Se $\\phi=1$ é random walk."
+});
+
+Q.push({
+  id: "q11", level: 3, kind: "Múltipla escolha · conceitual",
+  title: "Tendência <em>determinística</em> vs. <em>estocástica</em> — qual afirmação é correta?",
+  type: "mc",
+  options: [
+    "Determinística: remover por diferenciação; estocástica: por regressão em $t$",
+    "Determinística: remover por regressão em $t$; estocástica: por diferenciação",
+    "São equivalentes — qualquer método remove ambas",
+    "Apenas a estocástica afeta a previsão"
+  ],
+  correct: 1,
+  explain: "<b>Determinística</b> ($\\mu+\\beta t$) sai com regressão em $t$. <b>Estocástica</b> (raiz unitária) sai com diferenciação. Confundir uma com a outra leva a <i>spurious regression</i> ou <i>over-differencing</i>."
+});
+
+Q.push({
+  id: "q12", level: 3, kind: "Múltipla escolha · seleção de modelo",
+  title: "Comparando $\\mathrm{AIC}$ e $\\mathrm{BIC}$ na seleção de modelos ARIMA…",
+  type: "mc",
+  options: [
+    "AIC penaliza complexidade mais que BIC",
+    "BIC penaliza complexidade mais que AIC (cresce com $\\log n$)",
+    "Ambos penalizam igualmente — só mudam a constante",
+    "BIC ignora a verossimilhança"
+  ],
+  correct: 1,
+  explain: "<b>$\\mathrm{AIC}=-2\\ell+2k$</b>; <b>$\\mathrm{BIC}=-2\\ell+k\\log n$</b>. Para $n\\geq 8$, $\\log n>2$, então BIC penaliza mais — tende a modelos parcimoniosos. AIC tende a sobrefitar; BIC a subfitar."
+});
+
+// LEVEL 4 — hardcore ---------------------------------------------------------
+Q.push({
+  id: "q13", level: 4, kind: "Pegadinha · economista atento",
+  title: "No teste <em>KPSS</em>, qual é a hipótese nula?",
+  type: "mc",
+  options: [
+    "Existe raiz unitária (não-estacionariedade)",
+    "A série é estacionária (em torno de nível ou tendência)",
+    "Os resíduos são iid",
+    "A série tem sazonalidade"
+  ],
+  correct: 1,
+  explain: "<b>$H_0$ do KPSS: estacionariedade</b> — exatamente o oposto do ADF. Por isso usamos os dois em conjunto: ADF rejeita E KPSS não rejeita ⇒ evidência forte de estacionariedade. Ambos rejeitam ⇒ inconclusivo."
+});
+
+Q.push({
+  id: "q14", level: 4, kind: "Identifique o processo",
+  title: "A ACF/PACF abaixo (n=200) sugere qual modelo?",
+  type: "mc", visual: "acfPacfAR2",
+  options: [
+    "$\\mathrm{MA}(2)$: ACF corta no lag 2, PACF decai",
+    "$\\mathrm{AR}(2)$: PACF corta no lag 2, ACF decai",
+    "Random walk: ACF decai linearmente",
+    "White noise: tudo dentro da banda"
+  ],
+  correct: 1,
+  explain: "<b>$\\mathrm{AR}(2)$.</b> PACF tem dois picos significativos seguidos de zeros (corte em $p=2$); ACF decai como mistura de senoides amortecidas. Em MA é o contrário."
+});
+
+Q.push({
+  id: "q15", level: 4, kind: "Múltipla escolha · invertibilidade",
+  title: "Sobre a <em>invertibilidade</em> de um $\\mathrm{MA}(1)$: $Y_t = \\varepsilon_t + \\theta\\,\\varepsilon_{t-1}$",
+  type: "mc",
+  options: [
+    "Toda $\\mathrm{MA}(1)$ é invertível por construção",
+    "É invertível se $|\\theta|<1$; importa para representar como $\\mathrm{AR}(\\infty)$ e ter previsão estável",
+    "Invertibilidade é o mesmo que estacionariedade",
+    "Só importa se houver sazonalidade"
+  ],
+  correct: 1,
+  explain: "<b>$|\\theta|<1$.</b> MA é sempre estacionário (soma finita de white noise), mas só invertível se as raízes de $1+\\theta z=0$ ficam fora do círculo unitário. Sem invertibilidade, dois MAs distintos têm a mesma ACF — modelo não identificável."
+});
+
+Q.push({
+  id: "q16", level: 4, kind: "Final · fundamento teórico",
+  title: "Sobre o <em>Teorema da Decomposição de Wold</em>, qual afirmação é verdadeira?",
+  type: "mc",
+  options: [
+    "Toda série temporal pode ser modelada como $\\mathrm{AR}(p)$ finito",
+    "Todo processo estacionário em covariância admite uma representação $\\mathrm{MA}(\\infty)$ (parte determinística + parte estocástica linear)",
+    "É um teste estatístico para detectar sazonalidade",
+    "É equivalente ao teste de Ljung-Box"
+  ],
+  correct: 1,
+  explain: "<b>Wold (1938).</b> Todo processo fracamente estacionário decompõe-se como soma de um componente determinístico + um $\\mathrm{MA}(\\infty)$ com inovações white noise. É a justificativa teórica de por que ARMA é tão geral."
+});
+
+// ============================================================================
+// VOTER PAGE
+// ============================================================================
+if (IS_VOTER) {
+  document.body.classList.add("voter");
+  initVoter();
+} else {
+  document.body.classList.add("projection");
+  initProjection();
+}
+
+function getVoterId() {
+  let id = localStorage.getItem("voterId");
+  if (!id) {
+    id = "v_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    localStorage.setItem("voterId", id);
+  }
+  return id;
+}
+
+function initVoter() {
+  const root = document.getElementById("root");
+  root.innerHTML = `
+    <div class="voter-shell">
+      <div class="header">FA · PADS Insper · Recap aulas 1–2</div>
+      <div id="vbody"></div>
+      <div class="footer-tag">Sessão: ${SESSION_ID}</div>
+    </div>
+  `;
+  const vbody = document.getElementById("vbody");
+
+  if (!useFirebase) {
+    vbody.innerHTML = `
+      <div class="qcard">
+        <h2>Votação online indisponível</h2>
+        <p class="subtle">A página de votação remota requer configuração do Firebase pelo professor. Enquanto isso, vote pelo chat da aula — A, B, C ou D.</p>
+      </div>`;
+    return;
+  }
+
+  let currentIdx = -1;
+  const voterId = getVoterId();
+  const sessionRef = db.ref(`sessions/${SESSION_ID}`);
+
+  sessionRef.child("currentIndex").on("value", snap => {
+    const idx = snap.val();
+    if (idx === null || idx === undefined) {
+      vbody.innerHTML = `<div class="waiting">⏳ Aguardando o professor iniciar…</div>`;
+      currentIdx = -1; return;
+    }
+    if (idx === -1) {
+      vbody.innerHTML = `<div class="waiting">⏳ Aguardando a primeira pergunta…<br/><span style="font-size:13px">A votação abre quando o professor avançar.</span></div>`;
+      currentIdx = -1; return;
+    }
+    if (idx >= Q.length) {
+      vbody.innerHTML = `<div class="waiting">🎉 Recap encerrado!<br/><span style="font-size:13px">Obrigado pela participação.</span></div>`;
+      currentIdx = idx; return;
+    }
+    if (idx !== currentIdx) {
+      currentIdx = idx;
+      renderVoterQuestion(idx);
+    }
+  });
+
+  function renderVoterQuestion(idx) {
+    const q = Q[idx];
+    const labels = q.type === "tf"
+      ? [{ key: "V", lbl: "Verdadeiro" }, { key: "F", lbl: "Falso" }]
+      : q.options.map((o, i) => ({ key: ["A", "B", "C", "D"][i], lbl: o }));
+    vbody.innerHTML = `
+      <div class="qcard">
+        <div class="subtle" style="margin-bottom:8px">Pergunta ${idx + 1} de ${Q.length}</div>
+        <h2>${q.title}</h2>
+        <div class="opts" id="vopts" style="margin-top:18px">
+          ${labels.map((l, i) => `
+            <button class="opt" data-idx="${i}" aria-pressed="false">
+              <div class="key">${l.key}</div>
+              <div>${l.lbl}</div>
+            </button>`).join("")}
+        </div>
+        <div id="vtoast"></div>
+      </div>
+    `;
+    typeset(vbody);
+
+    const qRef = sessionRef.child(`q${idx}`);
+    let myVote = null;
+    let locked = false;
+
+    function refreshUI() {
+      const btns = vbody.querySelectorAll("button.opt");
+      btns.forEach(b => {
+        const i = +b.dataset.idx;
+        b.setAttribute("aria-pressed", i === myVote ? "true" : "false");
+        b.disabled = locked;
+      });
+      const toast = document.getElementById("vtoast");
+      if (locked) {
+        toast.innerHTML = `<div class="toast locked">🔒 Votação encerrada.${myVote !== null ? " Seu voto: <b>" + (q.type === "tf" ? (myVote === 0 ? "V" : "F") : ["A","B","C","D"][myVote]) + "</b>" : ""}</div>`;
+      } else if (myVote !== null) {
+        toast.innerHTML = `<div class="toast">✓ Voto registrado: <b>${q.type === "tf" ? (myVote === 0 ? "Verdadeiro" : "Falso") : ["A","B","C","D"][myVote]}</b>. Você pode mudar enquanto estiver aberto.</div>`;
+      } else {
+        toast.innerHTML = "";
+      }
+    }
+
+    qRef.child(`votes/${voterId}`).on("value", s => { myVote = s.val(); if (myVote !== null) myVote = +myVote; refreshUI(); });
+    qRef.child("locked").on("value", s => { locked = !!s.val(); refreshUI(); });
+
+    vbody.querySelectorAll("button.opt").forEach(b => {
+      b.addEventListener("click", () => {
+        if (locked) return;
+        const i = +b.dataset.idx;
+        qRef.child(`votes/${voterId}`).set(i);
+      });
+    });
+  }
+}
+
+// ============================================================================
+// PROJECTION PAGE
+// ============================================================================
+function initProjection() {
+  const voterUrl = location.origin + location.pathname + "?vote=1" + (SESSION_ID !== "default" ? "&s=" + SESSION_ID : "");
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=${encodeURIComponent(voterUrl)}`;
+
+  document.getElementById("qrOverlayImg").src = qrSrc;
+  document.getElementById("qrOverlayUrl").textContent = voterUrl;
+
+  document.getElementById("root").innerHTML = `
+    <div class="stage" id="stage">
+      <div class="top">
+        <div class="brand">
+          <span class="dot"></span>
+          <span>Financial Analytics · PADS Insper</span>
+        </div>
+        <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
+        <div class="vote-status" id="voteStatus"><span class="dot"></span><span id="voteStatusLabel">${useFirebase ? "Votação online" : "Modo manual"}</span></div>
+        <div class="counter" id="counter">— / —</div>
+      </div>
+      <div id="content"></div>
+      <div class="bottom">
+        <div class="controls">
+          <span><kbd>Espaço</kbd> revela / avança</span>
+          <span><kbd>←</kbd> volta</span>
+          <span><kbd>Q</kbd> mostra QR grande</span>
+          <span><kbd>R</kbd> reinicia</span>
+          ${useFirebase ? "" : "<span><kbd>1-4</kbd> tally manual</span>"}
+        </div>
+        <div>Recap · Aulas 1 e 2 · Séries Temporais</div>
+      </div>
+    </div>
+  `;
+
+  const state = { index: -1, revealed: false, votes: [0, 0, 0, 0], voterCount: 0, fbDetached: null };
+  const content = document.getElementById("content");
+  const counter = document.getElementById("counter");
+  const progress = document.getElementById("progress");
+  const voteStatus = document.getElementById("voteStatus");
+  const voteStatusLabel = document.getElementById("voteStatusLabel");
+
+  const levelNames = {
+    1: "Nível 1 · Aquecimento",
+    2: "Nível 2 · Intuição",
+    3: "Nível 3 · Pós-Graduação",
+    4: "Nível 4 · Hardcore"
+  };
+
+  let sessionRef = null;
+  if (useFirebase && db) {
+    sessionRef = db.ref(`sessions/${SESSION_ID}`);
+    sessionRef.child("currentIndex").set(-1);
+  }
+
+  function detachFirebase() {
+    if (state.fbDetached) { state.fbDetached(); state.fbDetached = null; }
+  }
+
+  function attachFirebaseForQuestion(idx) {
+    detachFirebase();
+    if (!sessionRef || idx < 0 || idx >= Q.length) return;
+    const q = Q[idx];
+    const optCount = q.type === "tf" ? 2 : (q.options ? q.options.length : 4);
+    state.votes = new Array(optCount).fill(0);
+    state.voterCount = 0;
+    const qRef = sessionRef.child(`q${idx}/votes`);
+    const handler = qRef.on("value", snap => {
+      const v = snap.val() || {};
+      const counts = new Array(optCount).fill(0);
+      let n = 0;
+      Object.values(v).forEach(opt => {
+        const i = +opt;
+        if (Number.isFinite(i) && i >= 0 && i < optCount) { counts[i]++; n++; }
+      });
+      state.votes = counts;
+      state.voterCount = n;
+      updateBars();
+    });
+    state.fbDetached = () => qRef.off("value", handler);
+  }
+
+  function updateBars() {
+    voteStatusLabel.textContent = useFirebase
+      ? `${state.voterCount} ${state.voterCount === 1 ? "voto" : "votos"}`
+      : `Tally manual · ${state.votes.reduce((a,b)=>a+b,0)} votos`;
+    voteStatus.classList.toggle("online", useFirebase);
+    voteStatus.classList.toggle("locked", state.revealed);
+
+    const total = state.votes.reduce((a, b) => a + b, 0) || 1;
+    document.querySelectorAll(".opt").forEach(el => {
+      const i = +el.dataset.idx;
+      const count = state.votes[i] || 0;
+      const pct = (count / total) * 100;
+      const bar = el.querySelector(".vbar");
+      if (bar) bar.style.width = `${pct}%`;
+      const c = el.querySelector(".vcount");
+      if (c) {
+        c.textContent = state.revealed
+          ? `${count} (${Math.round(pct)}%)`
+          : (count > 0 ? `${count}` : "");
+        c.classList.toggle("show", count > 0 || state.revealed);
+      }
+    });
+  }
+
+  function render() {
+    content.innerHTML = "";
+    detachFirebase();
+
+    if (state.index === -1) { renderCover(); return; }
+    if (state.index >= Q.length) { renderEnd(); return; }
+
+    const q = Q[state.index];
+    counter.textContent = `${state.index + 1} / ${Q.length}`;
+    progress.style.width = `${((state.index + 1) / Q.length) * 100}%`;
+
+    const wrap = document.createElement("div");
+    wrap.className = "panel fade-enter";
+    wrap.innerHTML = `
+      <div class="qhead">
+        <span class="level-badge" data-level="${q.level}">${levelNames[q.level]}</span>
+        <span class="qkind">${q.kind}</span>
+        <span class="qnum">Pergunta ${state.index + 1}</span>
+      </div>
+      <div class="qbody ${q.visual ? "has-visual" : ""}">
+        ${q.visual ? `<div class="visual" id="visual"></div>` : ""}
+        <div>
+          <h2 class="qtitle">${q.title}</h2>
+          <div class="options ${q.type === "tf" ? "tf" : ""}" id="options"></div>
+          <div class="explain" id="explain">${q.explain}</div>
+        </div>
+      </div>
+    `;
+    content.appendChild(wrap);
+
+    if (q.visual) renderVisual(q.visual, document.getElementById("visual"));
+
+    const optsEl = document.getElementById("options");
+    const labels = q.type === "tf"
+      ? [{ icon: "✓", lbl: "Verdadeiro" }, { icon: "✕", lbl: "Falso" }]
+      : q.options.map((o, i) => ({ key: ["A", "B", "C", "D"][i], lbl: o }));
+
+    labels.forEach((l, i) => {
+      const el = document.createElement("div");
+      el.className = "opt";
+      el.dataset.idx = i;
+      if (q.type === "tf") {
+        el.innerHTML = `
+          <div class="vbar"></div>
+          <div class="lbl"><div class="icon">${l.icon}</div><div>${l.lbl}</div></div>
+          <div class="vcount"></div>
+        `;
+      } else {
+        el.innerHTML = `
+          <div class="vbar"></div>
+          <div class="key">${l.key}</div>
+          <div>${l.lbl}</div>
+          <div class="vcount"></div>
+        `;
+      }
+      optsEl.appendChild(el);
+    });
+
+    typeset(content);
+
+    if (sessionRef) {
+      sessionRef.child("currentIndex").set(state.index);
+      sessionRef.child(`q${state.index}/locked`).set(false);
+      attachFirebaseForQuestion(state.index);
+    } else {
+      // modo manual — zera votos
+      state.votes = new Array(labels.length).fill(0);
+      state.voterCount = 0;
+    }
+    updateBars();
+  }
+
+  function renderVisual(kind, host) {
+    if (kind === "fourSeries") {
+      host.innerHTML = `<h4>Quatro processos · qual é o random walk?</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;height:100%;">
+          <div style="position:relative"><canvas id="cA"></canvas><span style="position:absolute;top:6px;left:10px;font-size:12px;color:var(--muted)">A</span></div>
+          <div style="position:relative"><canvas id="cB"></canvas><span style="position:absolute;top:6px;left:10px;font-size:12px;color:var(--muted)">B</span></div>
+          <div style="position:relative"><canvas id="cC"></canvas><span style="position:absolute;top:6px;left:10px;font-size:12px;color:var(--muted)">C</span></div>
+          <div style="position:relative"><canvas id="cD"></canvas><span style="position:absolute;top:6px;left:10px;font-size:12px;color:var(--muted)">D</span></div>
+        </div>`;
+      requestAnimationFrame(() => {
+        const c = "#cfd8ee";
+        plotSeries(document.getElementById("cA"), whiteNoise(220, 11), { color: c });
+        plotSeries(document.getElementById("cB"), randomWalk(220, 17), { color: c });
+        plotSeries(document.getElementById("cC"), trendSeries(220, 0.05, 23), { color: c });
+        plotSeries(document.getElementById("cD"), seasonalSeries(220, 24, 2.2, 29), { color: c });
+      });
+    } else if (kind === "acfPacfAR2") {
+      host.innerHTML = `<h4>ACF e PACF — n = 200</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;height:100%;">
+          <div style="position:relative;display:grid;grid-template-rows:auto 1fr">
+            <div style="font-size:12px;color:var(--muted);text-align:center;letter-spacing:0.1em;text-transform:uppercase;padding:4px">ACF</div>
+            <canvas id="acfC"></canvas>
+          </div>
+          <div style="position:relative;display:grid;grid-template-rows:auto 1fr">
+            <div style="font-size:12px;color:var(--muted);text-align:center;letter-spacing:0.1em;text-transform:uppercase;padding:4px">PACF</div>
+            <canvas id="pacfC"></canvas>
+          </div>
+        </div>`;
+      const phi1 = 0.6, phi2 = 0.25;
+      const acf = [1];
+      acf[1] = phi1 / (1 - phi2);
+      for (let k = 2; k < 16; k++) acf[k] = phi1 * acf[k - 1] + phi2 * acf[k - 2];
+      const pacf = [1, phi1 / (1 - phi2), phi2];
+      const r = mulberry32(7);
+      for (let k = 3; k < 16; k++) pacf[k] = (r() - 0.5) * 0.06;
+      requestAnimationFrame(() => {
+        plotACF(document.getElementById("acfC"), acf.slice(1), { n: 200, color: "#ffd166" });
+        plotACF(document.getElementById("pacfC"), pacf.slice(1), { n: 200, color: "#06d6a0" });
+      });
+    }
+  }
+
+  function reveal() {
+    if (state.revealed) return;
+    state.revealed = true;
+    const q = Q[state.index];
+    if (sessionRef) sessionRef.child(`q${state.index}/locked`).set(true);
+    document.querySelectorAll(".opt").forEach((el, i) => {
+      if (i === q.correct) el.classList.add("correct");
+      else el.classList.add("wrong");
+    });
+    document.getElementById("explain").classList.add("show");
+    typeset(document.getElementById("explain"));
+    updateBars();
+  }
+
+  function renderCover() {
+    counter.textContent = `— / ${Q.length}`;
+    progress.style.width = "0%";
+    const wrap = document.createElement("div");
+    wrap.className = "cover fade-enter";
+    wrap.innerHTML = `
+      <div class="hint pulse">Aulas 1 e 2 · Recap interativo</div>
+      <h1>Séries Temporais:<br/><span>O que ficou da última aula?</span></h1>
+      <p class="sub">${Q.length} perguntas em 4 níveis. Vai começar de aquecimento e terminar em coisa que dá calafrio em economista.</p>
+      <div class="roadmap">
+        <div class="chip"><b>Nível 1</b>Aquecimento</div>
+        <div class="chip"><b>Nível 2</b>Intuição</div>
+        <div class="chip"><b>Nível 3</b>Pós-Graduação</div>
+        <div class="chip"><b>Nível 4</b>Hardcore</div>
+      </div>
+      ${useFirebase ? `
+        <div class="cover-vote">
+          <div class="label">Vote pelo celular</div>
+          <div class="qrbox"><img src="${qrSrc}" alt="QR para votação"/></div>
+          <div class="url-line">${voterUrl}</div>
+        </div>
+      ` : `
+        <div class="hint" style="opacity:0.7">Votação remota não configurada. <kbd>1-4</kbd> tally manual.</div>
+      `}
+      <div class="hint">Pressione <kbd>Espaço</kbd> para começar · <kbd>F</kbd> tela cheia</div>
+    `;
+    content.appendChild(wrap);
+    if (sessionRef) sessionRef.child("currentIndex").set(-1);
+  }
+
+  function renderEnd() {
+    counter.textContent = `${Q.length} / ${Q.length}`;
+    progress.style.width = "100%";
+    const wrap = document.createElement("div");
+    wrap.className = "end fade-enter";
+    wrap.innerHTML = `
+      <div class="hint">Recap completo</div>
+      <h2>Bom trabalho! 🎯</h2>
+      <p>Vocês acabaram de revisar fundamentos, ACF/PACF, estacionariedade, ADF/KPSS, AR/MA/ARIMA, invertibilidade e Wold. Pronto para SARIMA, Prophet e previsão.</p>
+      <div class="hint"><kbd>←</kbd> volta · <kbd>R</kbd> reinicia</div>
+    `;
+    content.appendChild(wrap);
+    if (sessionRef) sessionRef.child("currentIndex").set(Q.length);
+  }
+
+  function next() {
+    if (state.index >= 0 && state.index < Q.length && !state.revealed) {
+      reveal(); return;
+    }
+    if (state.index < Q.length) {
+      state.index++;
+      state.revealed = false;
+      render();
+    }
+  }
+  function prev() {
+    if (state.index > -1) {
+      state.index--;
+      state.revealed = false;
+      render();
+    }
+  }
+  function restart() { state.index = -1; state.revealed = false; render(); }
+
+  // QR overlay toggle
+  const qrOverlay = document.getElementById("qrOverlay");
+  function toggleQR() { qrOverlay.classList.toggle("show"); }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === " " || e.key === "ArrowRight" || e.key === "Enter") {
+      e.preventDefault(); next();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault(); prev();
+    } else if (e.key.toLowerCase() === "r") {
+      restart();
+    } else if (e.key.toLowerCase() === "q") {
+      e.preventDefault(); toggleQR();
+    } else if (e.key.toLowerCase() === "f") {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    } else if (!useFirebase && state.index >= 0 && state.index < Q.length && !state.revealed) {
+      // tally manual: 1-4 ou V/F adicionam um voto
+      const q = Q[state.index];
+      const optCount = q.type === "tf" ? 2 : q.options.length;
+      let idx = -1;
+      if (q.type === "tf") {
+        if (e.key === "1" || e.key.toLowerCase() === "v") idx = 0;
+        else if (e.key === "2" || e.key.toLowerCase() === "f") idx = 1;
+      } else {
+        const map = { "1": 0, "2": 1, "3": 2, "4": 3, "a": 0, "b": 1, "c": 2, "d": 3 };
+        if (map[e.key.toLowerCase()] !== undefined) idx = map[e.key.toLowerCase()];
+      }
+      if (idx >= 0 && idx < optCount) {
+        state.votes[idx] = (state.votes[idx] || 0) + 1;
+        updateBars();
+      } else if (e.key.toLowerCase() === "c") {
+        state.votes = new Array(optCount).fill(0);
+        updateBars();
+      }
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (state.index >= 0 && state.index < Q.length && Q[state.index].visual) {
+      const v = document.getElementById("visual");
+      if (v) renderVisual(Q[state.index].visual, v);
+    }
+  });
+
+  render();
+}
+</script>
+</body>
+</html>
