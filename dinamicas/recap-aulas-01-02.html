@@ -1013,7 +1013,18 @@ function initProjection() {
   function clearVotes() {
     if (state.index < 0 || state.index >= Q.length) return;
     if (sessionRef) {
-      sessionRef.child(`q${state.index}/votes`).remove();
+      // As rules permitem write apenas por $voterId — não dá pra remover o
+      // subtree "votes" inteiro de uma vez. Então listamos os voterIds e
+      // setamos cada um como null (delete granular).
+      const votesRef = sessionRef.child(`q${state.index}/votes`);
+      votesRef.once("value").then(snap => {
+        const v = snap.val() || {};
+        const ids = Object.keys(v);
+        if (ids.length === 0) return;
+        const updates = {};
+        ids.forEach(vid => { updates[vid] = null; });
+        votesRef.update(updates).catch(err => console.error("clearVotes:", err));
+      });
       sessionRef.child(`q${state.index}/locked`).set(false);
     }
     const q = Q[state.index];
