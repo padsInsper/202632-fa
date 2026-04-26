@@ -175,11 +175,16 @@
   table.aic-table th:nth-child(4) {
     text-align: right;
   }
-  table.aic-table tr.winner td {
-    background: linear-gradient(90deg, rgba(6,214,160,0.16), rgba(6,214,160,0.02));
+  /* highlight só aparece após reveal (.visual.revealed adicionado em reveal()) */
+  table.aic-table tr.winner td,
+  table.aic-table tr.trap td {
+    /* default: sem destaque */
+  }
+  .visual.revealed table.aic-table tr.winner td {
+    background: linear-gradient(90deg, rgba(6,214,160,0.18), rgba(6,214,160,0.02));
     color: var(--accent-2); font-weight: 600;
   }
-  table.aic-table tr.trap td {
+  .visual.revealed table.aic-table tr.trap td {
     background: linear-gradient(90deg, rgba(239,71,111,0.14), rgba(239,71,111,0.02));
     color: #ffb3c5;
   }
@@ -187,6 +192,9 @@
     font-size: 13px; color: var(--muted); padding: 0 8px;
     line-height: 1.5;
   }
+  .aic-note.spoiler { display: none; color: var(--danger); }
+  .visual.revealed .aic-note.neutral { display: none; }
+  .visual.revealed .aic-note.spoiler { display: block; }
 
   .options { display: grid; gap: 12px; align-content: start; }
   .opt {
@@ -521,6 +529,16 @@ function seasonalSeries(n, period = 24, amp = 2, seed = 4) {
     a.push(amp * Math.sin((2 * Math.PI * i) / period) + gauss(r) * 0.4);
   return a;
 }
+function multiplicativeSeasonalSeries(n, period = 12, seed = 5) {
+  // amplitude sazonal proporcional ao nível: clássico padrão multiplicativo
+  const r = mulberry32(seed); const a = [];
+  for (let i = 0; i < n; i++) {
+    const trend = 50 + 0.45 * i;
+    const seasonal = 1 + 0.32 * Math.sin((2 * Math.PI * i) / period);
+    a.push(trend * seasonal + gauss(r) * 1.4);
+  }
+  return a;
+}
 
 function plotSeries(canvas, data, opts = {}) {
   const dpr = window.devicePixelRatio || 1;
@@ -633,6 +651,20 @@ Q.push({
 });
 
 Q.push({
+  id: "q5b", level: 2, kind: "Decomposição · aditiva ou multiplicativa?",
+  title: "Você observa esta série mensal. Qual decomposição você aplica e por quê?",
+  type: "mc", visual: "multiplicativeSeries",
+  options: [
+    "Aditiva — $Y_t = T_t + S_t + R_t$, porque a sazonalidade tem amplitude constante ao longo do tempo",
+    "Multiplicativa — $Y_t = T_t \\cdot S_t \\cdot R_t$, porque a amplitude sazonal cresce proporcionalmente ao nível",
+    "Aditiva — sempre é a primeira escolha por simplicidade",
+    "Multiplicativa — porque a série tem tendência crescente"
+  ],
+  correct: 1,
+  explain: "<b>Multiplicativa.</b> A pista é a <i>amplitude sazonal crescendo com o nível</i> — picos cada vez maiores e vales mais profundos em valores absolutos. Aplicando $\\log$, a série voltaria a ter sazonalidade de amplitude constante (forma aditiva no log). A opção (3) usa uma falsa regra de simplicidade. A (4) confunde efeito (tendência crescente) com causa (amplitude proporcional ao nível): uma série pode ter tendência crescente e sazonalidade aditiva ao mesmo tempo."
+});
+
+Q.push({
   id: "q6", level: 2, kind: "Múltipla escolha",
   title: "Para identificar a ordem $p$ de um $\\mathrm{AR}(p)$ puro, qual gráfico é mais informativo?",
   type: "mc",
@@ -681,7 +713,7 @@ Q.push({
 
 Q.push({
   id: "q10", level: 3, kind: "Múltipla escolha · álgebra",
-  title: "Para que um $\\mathrm{AR}(1)$ com $Y_t = \\phi\\,Y_{t-1} + \\varepsilon_t$ seja <em>estacionário em covariância</em>, precisamos…",
+  title: "Para que um $\\mathrm{AR}(1)$ com $Y_t = \\phi\\,Y_{t-1} + \\varepsilon_t$ seja <em>estacionário</em>, precisamos…",
   type: "mc",
   options: ["$\\phi > 0$", "$\\phi = 1$", "$|\\phi| < 1$", "$\\phi < 0$"],
   correct: 2,
@@ -743,6 +775,20 @@ Q.push({
   ],
   correct: 1,
   explain: "<b>$\\mathrm{AR}(2)$.</b> PACF tem dois picos significativos seguidos de zeros (corte em $p=2$); ACF decai como mistura de senoides amortecidas. Em MA é o contrário."
+});
+
+Q.push({
+  id: "q14b", level: 4, kind: "Hardcore · raízes do polinômio característico",
+  title: "Considere o $\\mathrm{AR}(2)$:&nbsp;&nbsp; $Y_t = Y_{t-1} - \\tfrac{1}{2}\\,Y_{t-2} + \\varepsilon_t$.&nbsp;&nbsp; O processo é estacionário?",
+  type: "mc",
+  options: [
+    "Não — $\\phi_1 = 1$ implica raiz unitária; o processo se comporta como random walk",
+    "Sim — pela fórmula de Bhaskara, raízes $z = 1 \\pm i$, com $|z|=\\sqrt{2}>1$ (fora do círculo unitário)",
+    "Não — $|\\phi_1|=1 \\not< 1$ viola a condição de estacionariedade",
+    "Sim — discriminante negativo garante estabilidade do sistema"
+  ],
+  correct: 1,
+  explain: "<b>É estacionário.</b> O polinômio é $\\Phi(z) = 1 - z + \\tfrac{1}{2}z^2 = 0$, ou equivalentemente $z^2 - 2z + 2 = 0$. Bhaskara: $z = \\dfrac{2 \\pm \\sqrt{4-8}}{2} = \\dfrac{2 \\pm 2i}{2} = 1 \\pm i$. Raízes <i>complexas conjugadas</i>, com módulo $|z| = \\sqrt{1^2+1^2} = \\sqrt{2}\\approx 1{,}41 > 1$ — fora do círculo unitário, então estacionário (com oscilações pseudo-cíclicas amortecidas, típicas de raízes complexas). A (1) ignora o efeito de $\\phi_2$. A (3) tenta estender a regra de AR(1) coeficiente a coeficiente — em AR($p\\geq 2$), o teste é nas raízes do polinômio. A (4) confunde discriminante (real vs. complexa) com módulo (dentro vs. fora do círculo)."
 });
 
 Q.push({
@@ -1037,6 +1083,8 @@ function initProjection() {
       document.querySelectorAll(".opt").forEach(el => {
         el.classList.remove("correct", "wrong");
       });
+      const visual = document.getElementById("visual");
+      if (visual) visual.classList.remove("revealed");
       const ex = document.getElementById("explain");
       if (ex) ex.classList.remove("show");
     }
@@ -1136,6 +1184,13 @@ function initProjection() {
         plotSeries(document.getElementById("cC"), trendSeries(220, 0.05, 23), { color: c });
         plotSeries(document.getElementById("cD"), seasonalSeries(220, 24, 2.2, 29), { color: c });
       });
+    } else if (kind === "multiplicativeSeries") {
+      host.innerHTML = `<h4>Série mensal · 16 anos</h4>
+        <div style="position:relative;height:100%"><canvas id="cMul"></canvas></div>`;
+      requestAnimationFrame(() => {
+        plotSeries(document.getElementById("cMul"),
+          multiplicativeSeasonalSeries(192, 12, 41), { color: "#cfd8ee" });
+      });
     } else if (kind === "acfPacfAR2") {
       host.innerHTML = `<h4>ACF e PACF — n = 200</h4>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;height:100%;">
@@ -1163,30 +1218,31 @@ function initProjection() {
       host.innerHTML = `<h4>Saída do auto.arima — mesma série, $d=1$ fixo</h4>
         <div class="aic-table-wrap">
           <table class="aic-table">
-            <thead><tr><th>Modelo</th><th>AIC</th><th>ΔAIC</th><th>k</th></tr></thead>
+            <thead><tr><th>Modelo</th><th>AIC</th></tr></thead>
             <tbody>
-              <tr><td>ARIMA(1,1,0)</td><td>528.4</td><td>+8.7</td><td>2</td></tr>
-              <tr><td>ARIMA(0,1,1)</td><td>524.9</td><td>+5.2</td><td>2</td></tr>
-              <tr class="winner"><td>ARIMA(1,1,1)</td><td><b>519.7</b></td><td>—</td><td>3</td></tr>
-              <tr><td>ARIMA(2,1,2)</td><td>522.3</td><td>+2.6</td><td>5</td></tr>
+              <tr data-row="0"><td>ARIMA(1,1,0)</td><td>528.4</td></tr>
+              <tr data-row="1"><td>ARIMA(0,1,1)</td><td>524.9</td></tr>
+              <tr data-row="2" class="winner"><td>ARIMA(1,1,1)</td><td>519.7</td></tr>
+              <tr data-row="3"><td>ARIMA(2,1,2)</td><td>522.3</td></tr>
             </tbody>
           </table>
-          <div class="aic-note">$\\mathrm{AIC} = -2\\ell + 2k$ &nbsp;·&nbsp; menor é melhor &nbsp;·&nbsp; $\\Delta\\mathrm{AIC}<2$ ≈ equivalentes (Burnham &amp; Anderson)</div>
+          <div class="aic-note neutral">$\\mathrm{AIC} = -2\\ell + 2k$ &nbsp;·&nbsp; menor é melhor para o mesmo conjunto de dados.</div>
         </div>`;
       requestAnimationFrame(() => typeset(host));
     } else if (kind === "aicTable2") {
       host.innerHTML = `<h4>Comparação cruzada — atenção ao $d$</h4>
         <div class="aic-table-wrap">
           <table class="aic-table">
-            <thead><tr><th>Modelo</th><th>$d$</th><th>n efetivo</th><th>AIC</th></tr></thead>
+            <thead><tr><th>Modelo</th><th>$d$</th><th>AIC</th></tr></thead>
             <tbody>
-              <tr><td>ARIMA(1,0,1)</td><td>0</td><td>200</td><td>1842.5</td></tr>
-              <tr><td>ARIMA(2,0,1)</td><td>0</td><td>200</td><td>1839.1</td></tr>
-              <tr class="trap"><td>ARIMA(1,1,1)</td><td>1</td><td>199</td><td><b>521.3</b></td></tr>
-              <tr class="trap"><td>ARIMA(0,1,1)</td><td>1</td><td>199</td><td>523.8</td></tr>
+              <tr><td>ARIMA(1,0,1)</td><td>0</td><td>1842.5</td></tr>
+              <tr><td>ARIMA(2,0,1)</td><td>0</td><td>1839.1</td></tr>
+              <tr class="trap"><td>ARIMA(1,1,1)</td><td>1</td><td>521.3</td></tr>
+              <tr class="trap"><td>ARIMA(0,1,1)</td><td>1</td><td>523.8</td></tr>
             </tbody>
           </table>
-          <div class="aic-note" style="color: var(--danger)">⚠ $d$ diferente ⇒ variável dependente diferente ($Y_t$ vs $\\Delta Y_t$) ⇒ log-verossimilhanças <i>não</i> são comparáveis.</div>
+          <div class="aic-note neutral">Mesma série, mesma amostra. Você compararia esses AICs para escolher um modelo?</div>
+          <div class="aic-note spoiler">⚠ $d$ diferente ⇒ variável dependente diferente ($Y_t$ vs $\\Delta Y_t$) ⇒ log-verossimilhanças <i>não</i> são comparáveis.</div>
         </div>`;
       requestAnimationFrame(() => typeset(host));
     }
@@ -1201,6 +1257,8 @@ function initProjection() {
       if (i === q.correct) el.classList.add("correct");
       else el.classList.add("wrong");
     });
+    const visual = document.getElementById("visual");
+    if (visual) visual.classList.add("revealed");
     document.getElementById("explain").classList.add("show");
     typeset(document.getElementById("explain"));
     updateBars();
