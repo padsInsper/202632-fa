@@ -34,7 +34,7 @@ dados_tsibble <- dados |>
 
 # PASSO 1
 dados_tsibble |>
-  feasts::gg_tsdisplay(vendas, plot_type = "partial")
+  ggtime::gg_tsdisplay(vendas, plot_type = "partial")
 
 tseries::adf.test(dados_tsibble$vendas)
 
