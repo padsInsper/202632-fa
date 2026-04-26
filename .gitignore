@@ -14,6 +14,7 @@ _ref_microbook/
 **/*.quarto_ipynb
 dinamicas/*
 !dinamicas/recap-aulas-01-02.html
+!dinamicas/template-exercicio-sarima.qmd
 manual_marca/
 
 # Dados do professor (gabarito do trabalho intermediário)
