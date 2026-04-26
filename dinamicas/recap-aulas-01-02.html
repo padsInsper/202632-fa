@@ -10,38 +10,65 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 
+<!-- Tipografia da marca Insper: Inter (texto) — GT Ultra Fine carregada via @font-face local -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+
 <!-- Firebase (compat para uso simples em <script>) -->
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 
 <style>
+  /* Tipografia oficial Insper — GT Ultra Fine Bold (display) */
+  @font-face {
+    font-family: "GT Ultra Fine";
+    src: url("../manual_marca/GTUltraFine-Bold.f6fa8a8b.woff") format("woff"),
+         url("../manual_marca/GTUltraFine-Bold.f6fa8a8b.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+
   :root {
-    --bg-0: #0b1020;
-    --bg-1: #131a35;
-    --bg-2: #1d2750;
-    --fg: #f4f6fb;
-    --muted: #97a3c4;
-    --accent: #ffd166;
-    --accent-2: #06d6a0;
-    --danger: #ef476f;
+    /* Paleta Insper: vermelho da marca + neutros (preto / branco) */
     --insper: #e50505;
-    --card: rgba(255,255,255,0.04);
-    --card-border: rgba(255,255,255,0.08);
-    --shadow: 0 30px 80px rgba(0,0,0,0.55);
+    --insper-dark: #b80404;
+    --insper-deep: #780202;
+
+    --bg-0: #060606;
+    --bg-1: #0e0e0e;
+    --bg-2: #181818;
+    --fg: #ffffff;
+    --muted: #a3a3a3;
+
+    /* Acentos funcionais (UX do quiz) — tons sóbrios alinhados ao manual */
+    --accent: var(--insper);            /* destaque primário = vermelho Insper */
+    --accent-2: #1aa66a;                /* verde funcional p/ "correto" */
+    --warn: #d97706;                    /* âmbar p/ atenção */
+    --danger: var(--insper);
+
+    --card: rgba(255,255,255,0.035);
+    --card-border: rgba(255,255,255,0.10);
+    --shadow: 0 30px 80px rgba(0,0,0,0.65);
+
+    --font-display: "GT Ultra Fine", "Inter", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
 
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
 
   body {
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-body);
     color: var(--fg);
     background:
-      radial-gradient(1200px 600px at 20% -10%, rgba(229,5,5,0.18), transparent 60%),
-      radial-gradient(900px 500px at 110% 110%, rgba(6,214,160,0.12), transparent 60%),
-      linear-gradient(180deg, #0a0f22 0%, #0b1020 100%);
+      radial-gradient(1100px 560px at 18% -10%, rgba(229,5,5,0.22), transparent 60%),
+      radial-gradient(900px 520px at 110% 110%, rgba(229,5,5,0.08), transparent 65%),
+      linear-gradient(180deg, #050505 0%, #0a0a0a 100%);
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   body.voter { overflow: auto; user-select: none; }
   body.projection { overflow: hidden; user-select: none; }
@@ -60,31 +87,39 @@
   }
   .brand {
     display: flex; align-items: center; gap: 14px;
-    color: var(--muted); font-size: 14px; letter-spacing: 0.08em;
-    text-transform: uppercase;
+    color: var(--muted); font-size: 13px; letter-spacing: 0.10em;
+    text-transform: uppercase; font-weight: 500;
   }
-  .brand .dot { width: 10px; height: 10px; border-radius: 50%;
-    background: var(--insper); box-shadow: 0 0 16px rgba(229,5,5,0.7); }
+  .brand .logo {
+    height: 26px; width: auto; display: block;
+    filter: drop-shadow(0 2px 12px rgba(229,5,5,0.25));
+  }
+  .brand .sep {
+    width: 1px; height: 22px; background: rgba(255,255,255,0.18);
+    display: inline-block;
+  }
+  .brand .label { color: var(--muted); }
 
   .level-badge {
     display: inline-flex; align-items: center; gap: 10px;
     padding: 8px 16px; border-radius: 999px;
-    font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 600;
     transition: all 400ms ease;
   }
-  .level-badge[data-level="1"] { background: rgba(6,214,160,0.12); border: 1px solid rgba(6,214,160,0.4); color: var(--accent-2); }
-  .level-badge[data-level="2"] { background: rgba(255,209,102,0.12); border: 1px solid rgba(255,209,102,0.4); color: var(--accent); }
-  .level-badge[data-level="3"] { background: rgba(255,140,0,0.16); border: 1px solid rgba(255,140,0,0.45); color: #ff9a3c; }
-  .level-badge[data-level="4"] { background: rgba(239,71,111,0.18); border: 1px solid rgba(239,71,111,0.5); color: #ff5e85; }
+  .level-badge[data-level="1"] { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #e5e5e5; }
+  .level-badge[data-level="2"] { background: rgba(229,5,5,0.10); border: 1px solid rgba(229,5,5,0.35); color: #ffb3b3; }
+  .level-badge[data-level="3"] { background: rgba(229,5,5,0.18); border: 1px solid rgba(229,5,5,0.55); color: #ff7a7a; }
+  .level-badge[data-level="4"] { background: var(--insper); border: 1px solid var(--insper); color: #ffffff; box-shadow: 0 0 22px rgba(229,5,5,0.45); }
 
   .progress-wrap {
-    flex: 1; height: 6px; max-width: 420px; margin: 0 24px;
-    border-radius: 999px; background: rgba(255,255,255,0.06);
+    flex: 1; height: 4px; max-width: 420px; margin: 0 24px;
+    border-radius: 999px; background: rgba(255,255,255,0.08);
     overflow: hidden;
   }
   .progress-bar {
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, var(--accent-2), var(--accent), #ff9a3c, var(--danger));
+    background: linear-gradient(90deg, var(--insper-dark), var(--insper));
     transition: width 600ms cubic-bezier(0.16,1,0.3,1);
   }
 
@@ -100,8 +135,8 @@
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--muted);
   }
-  .vote-status.online .dot { background: var(--accent-2); box-shadow: 0 0 8px rgba(6,214,160,0.6); animation: pulse 2s infinite; }
-  .vote-status.locked .dot { background: var(--danger); }
+  .vote-status.online .dot { background: #1aa66a; box-shadow: 0 0 8px rgba(26,166,106,0.6); animation: pulse 2s infinite; }
+  .vote-status.locked .dot { background: var(--insper); box-shadow: 0 0 8px rgba(229,5,5,0.6); }
 
   /* MAIN STAGE */
   .panel {
@@ -123,16 +158,15 @@
   }
   .qtitle {
     margin: 0;
-    font-size: clamp(26px, 3.1vw, 42px);
+    font-family: var(--font-display);
+    font-size: clamp(28px, 3.2vw, 44px);
     font-weight: 700;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
   }
   .qtitle em {
     font-style: normal;
-    background: linear-gradient(90deg, var(--accent), #ff9a3c);
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent;
+    color: var(--insper);
   }
   .katex { font-size: 1.05em; }
 
@@ -181,18 +215,18 @@
     /* default: sem destaque */
   }
   .visual.revealed table.aic-table tr.winner td {
-    background: linear-gradient(90deg, rgba(6,214,160,0.18), rgba(6,214,160,0.02));
-    color: var(--accent-2); font-weight: 600;
+    background: linear-gradient(90deg, rgba(26,166,106,0.20), rgba(26,166,106,0.02));
+    color: #4ade80; font-weight: 600;
   }
   .visual.revealed table.aic-table tr.trap td {
-    background: linear-gradient(90deg, rgba(239,71,111,0.14), rgba(239,71,111,0.02));
-    color: #ffb3c5;
+    background: linear-gradient(90deg, rgba(229,5,5,0.16), rgba(229,5,5,0.02));
+    color: #ff9a9a;
   }
   .aic-note {
     font-size: 13px; color: var(--muted); padding: 0 8px;
     line-height: 1.5;
   }
-  .aic-note.spoiler { display: none; color: var(--danger); }
+  .aic-note.spoiler { display: none; color: var(--insper); }
   .visual.revealed .aic-note.neutral { display: none; }
   .visual.revealed .aic-note.spoiler { display: block; }
 
@@ -229,13 +263,13 @@
   }
   .opt .vcount.show { opacity: 1; }
   .opt.correct {
-    border-color: var(--accent-2);
-    box-shadow: 0 0 0 1px rgba(6,214,160,0.4), 0 20px 50px rgba(6,214,160,0.18);
+    border-color: #1aa66a;
+    box-shadow: 0 0 0 1px rgba(26,166,106,0.45), 0 20px 50px rgba(26,166,106,0.18);
   }
-  .opt.correct .vbar { background: linear-gradient(90deg, rgba(6,214,160,0.32), rgba(6,214,160,0.10)); }
-  .opt.correct .key { background: var(--accent-2); color: #08221a; border-color: transparent; }
-  .opt.wrong { opacity: 0.65; border-color: rgba(239,71,111,0.3); }
-  .opt.wrong .vbar { background: linear-gradient(90deg, rgba(239,71,111,0.22), rgba(239,71,111,0.05)); }
+  .opt.correct .vbar { background: linear-gradient(90deg, rgba(26,166,106,0.32), rgba(26,166,106,0.10)); }
+  .opt.correct .key { background: #1aa66a; color: #04140c; border-color: transparent; }
+  .opt.wrong { opacity: 0.55; border-color: rgba(229,5,5,0.30); }
+  .opt.wrong .vbar { background: linear-gradient(90deg, rgba(229,5,5,0.22), rgba(229,5,5,0.05)); }
 
   .options.tf { grid-template-columns: 1fr 1fr; gap: 18px; }
   .options.tf .opt {
@@ -255,13 +289,13 @@
     height: 100%;
   }
   .cover h1 {
+    font-family: var(--font-display);
     font-size: clamp(44px, 6.5vw, 88px); margin: 0; line-height: 0.98;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
+    font-weight: 700;
   }
   .cover h1 span {
-    background: linear-gradient(90deg, var(--accent), #ff9a3c, var(--insper));
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent;
+    color: var(--insper);
   }
   .cover .sub { color: var(--muted); font-size: 20px; max-width: 760px; margin: 0 auto; line-height: 1.5; }
   .cover .hint { font-size: 13px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.85; }
@@ -282,7 +316,7 @@
   }
   .cover-vote .qrbox { background: white; padding: 14px; border-radius: 12px; }
   .cover-vote .qrbox img { display: block; width: 220px; height: 220px; }
-  .cover-vote .url-line { font-family: ui-monospace, monospace; color: var(--accent); font-size: 16px; word-break: break-all; max-width: 400px; }
+  .cover-vote .url-line { font-family: ui-monospace, monospace; color: #ff7a7a; font-size: 16px; word-break: break-all; max-width: 400px; }
   .cover-vote .label { font-size: 13px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; }
 
   .roadmap { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
@@ -297,18 +331,18 @@
   .explain {
     margin-top: 14px;
     padding: 16px 20px;
-    background: linear-gradient(180deg, rgba(255,209,102,0.08), rgba(255,209,102,0.02));
-    border: 1px solid rgba(255,209,102,0.25);
-    border-left: 3px solid var(--accent);
+    background: linear-gradient(180deg, rgba(229,5,5,0.10), rgba(229,5,5,0.02));
+    border: 1px solid rgba(229,5,5,0.30);
+    border-left: 3px solid var(--insper);
     border-radius: 12px;
-    color: #ffe8b3;
+    color: #ffe5e5;
     font-size: 16px; line-height: 1.5;
     opacity: 0; transform: translateY(8px);
     transition: opacity 350ms ease, transform 350ms ease;
     max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0; margin-top: 0; border-width: 0;
   }
   .explain.show { opacity: 1; transform: translateY(0); max-height: 360px; padding: 16px 20px; margin-top: 14px; border-width: 1px; border-left-width: 3px; }
-  .explain b { color: var(--accent); }
+  .explain b { color: #ff7a7a; }
 
   /* QR sidecar (always visible during questions, small) */
   .qr-mini {
@@ -328,7 +362,7 @@
   /* QR overlay (full screen for in-person mode) */
   .qr-overlay {
     position: fixed; inset: 0;
-    background: rgba(8,12,28,0.96);
+    background: rgba(0,0,0,0.94);
     display: none; place-items: center;
     z-index: 1000; padding: 40px;
   }
@@ -337,11 +371,12 @@
     text-align: center;
     background: white; padding: 36px;
     border-radius: 24px;
-    color: #0b1020;
+    color: #0a0a0a;
+    border-top: 6px solid var(--insper);
   }
   .qr-overlay img { width: min(60vmin, 480px); height: min(60vmin, 480px); display: block; margin: 0 auto 20px; }
-  .qr-overlay .url { font-family: ui-monospace, monospace; font-size: 22px; color: #0b1020; margin: 12px 0; word-break: break-all; }
-  .qr-overlay .hint { color: #4b5772; letter-spacing: 0.1em; text-transform: uppercase; font-size: 14px; }
+  .qr-overlay .url { font-family: ui-monospace, monospace; font-size: 22px; color: #0a0a0a; margin: 12px 0; word-break: break-all; }
+  .qr-overlay .hint { color: #555; letter-spacing: 0.1em; text-transform: uppercase; font-size: 14px; }
 
   /* BOTTOM */
   .bottom {
@@ -352,7 +387,7 @@
   }
   .controls { display: flex; gap: 14px; flex-wrap: wrap; }
 
-  .end h2 { font-size: clamp(40px, 5vw, 72px); margin: 0; }
+  .end h2 { font-family: var(--font-display); font-size: clamp(40px, 5vw, 72px); margin: 0; letter-spacing: -0.02em; }
   .end p { color: var(--muted); font-size: 20px; max-width: 720px; margin: 0 auto; line-height: 1.5; }
 
   .fade-enter { animation: fadein 360ms ease both; }
@@ -364,7 +399,8 @@
   @keyframes pulse { 0%,100% { opacity: 0.5 } 50% { opacity: 1 } }
 
   /* ============================ VOTER PAGE ============================ */
-  body.voter { background: linear-gradient(180deg, #0b1020 0%, #131a35 100%); }
+  body.voter { background: linear-gradient(180deg, #050505 0%, #141414 100%); }
+  body.voter h2 { font-family: var(--font-display); letter-spacing: -0.01em; }
   .voter-shell {
     min-height: 100vh; padding: 24px 18px 40px;
     display: flex; flex-direction: column; gap: 20px;
@@ -390,22 +426,22 @@
   }
   .voter-shell button.opt:active { transform: scale(0.98); }
   .voter-shell button.opt[aria-pressed="true"] {
-    background: rgba(6,214,160,0.18); border-color: var(--accent-2);
-    box-shadow: 0 0 0 1px rgba(6,214,160,0.5);
+    background: rgba(229,5,5,0.18); border-color: var(--insper);
+    box-shadow: 0 0 0 1px rgba(229,5,5,0.55);
   }
   .voter-shell button.opt .key {
     width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
     background: rgba(255,255,255,0.08); display: grid; place-items: center;
     font-weight: 700; color: var(--muted);
   }
-  .voter-shell button.opt[aria-pressed="true"] .key { background: var(--accent-2); color: #08221a; }
+  .voter-shell button.opt[aria-pressed="true"] .key { background: var(--insper); color: #ffffff; }
   .voter-shell button.opt:disabled { opacity: 0.55; cursor: not-allowed; }
   .voter-shell .toast {
     margin-top: 6px; padding: 12px 14px; border-radius: 10px;
-    background: rgba(6,214,160,0.1); border: 1px solid rgba(6,214,160,0.3);
-    color: var(--accent-2); font-size: 14px; text-align: center;
+    background: rgba(229,5,5,0.10); border: 1px solid rgba(229,5,5,0.32);
+    color: #ff9a9a; font-size: 14px; text-align: center;
   }
-  .voter-shell .toast.locked { background: rgba(239,71,111,0.1); border-color: rgba(239,71,111,0.3); color: var(--danger); }
+  .voter-shell .toast.locked { background: rgba(120,2,2,0.20); border-color: rgba(229,5,5,0.45); color: #ff7a7a; }
   .voter-shell .waiting {
     text-align: center; padding: 40px 20px;
     color: var(--muted); font-size: 15px; line-height: 1.6;
@@ -562,7 +598,7 @@ function plotSeries(canvas, data, opts = {}) {
     ctx.beginPath(); ctx.moveTo(pad.l, y(0)); ctx.lineTo(pad.l + w, y(0)); ctx.stroke();
     ctx.setLineDash([]);
   }
-  ctx.strokeStyle = opts.color || "#ffd166";
+  ctx.strokeStyle = opts.color || "#ff7a7a";
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   data.forEach((v, i) => { if (i === 0) ctx.moveTo(x(i), y(v)); else ctx.lineTo(x(i), y(v)); });
@@ -585,7 +621,7 @@ function plotACF(canvas, coeffs, opts = {}) {
   ctx.strokeStyle = "rgba(255,255,255,0.18)";
   ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(pad.l + w, y0); ctx.stroke();
   const band = 1.96 / Math.sqrt(opts.n || 200);
-  ctx.strokeStyle = "rgba(6,214,160,0.6)"; ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = "rgba(26,166,106,0.65)"; ctx.setLineDash([5, 5]);
   ctx.beginPath();
   ctx.moveTo(pad.l, y0 - band * yScale); ctx.lineTo(pad.l + w, y0 - band * yScale);
   ctx.moveTo(pad.l, y0 + band * yScale); ctx.lineTo(pad.l + w, y0 + band * yScale);
@@ -594,7 +630,7 @@ function plotACF(canvas, coeffs, opts = {}) {
   coeffs.forEach((c, i) => {
     const cx = x(i);
     const top = y0 - c * yScale;
-    ctx.fillStyle = Math.abs(c) > band ? (opts.color || "#ffd166") : "rgba(255,255,255,0.45)";
+    ctx.fillStyle = Math.abs(c) > band ? (opts.color || "#e50505") : "rgba(255,255,255,0.45)";
     ctx.fillRect(cx - bw / 2, Math.min(y0, top), bw, Math.abs(c * yScale));
   });
   ctx.fillStyle = "rgba(255,255,255,0.55)";
@@ -953,8 +989,9 @@ function initProjection() {
     <div class="stage" id="stage">
       <div class="top">
         <div class="brand">
-          <span class="dot"></span>
-          <span>Financial Analytics · PADS Insper</span>
+          <img class="logo" src="../manual_marca/LOGOTIPO-INSPER/INSPER/USO%20DIGITAL/logo-insper-branco.png" alt="Insper"/>
+          <span class="sep"></span>
+          <span class="label">Financial Analytics · PADS</span>
         </div>
         <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
         <div class="vote-status" id="voteStatus"><span class="dot"></span><span id="voteStatusLabel">${useFirebase ? "Votação online" : "Modo manual"}</span></div>
@@ -1211,8 +1248,8 @@ function initProjection() {
       const r = mulberry32(7);
       for (let k = 3; k < 16; k++) pacf[k] = (r() - 0.5) * 0.06;
       requestAnimationFrame(() => {
-        plotACF(document.getElementById("acfC"), acf.slice(1), { n: 200, color: "#ffd166" });
-        plotACF(document.getElementById("pacfC"), pacf.slice(1), { n: 200, color: "#06d6a0" });
+        plotACF(document.getElementById("acfC"), acf.slice(1), { n: 200, color: "#e50505" });
+        plotACF(document.getElementById("pacfC"), pacf.slice(1), { n: 200, color: "#1aa66a" });
       });
     } else if (kind === "aicTable1") {
       host.innerHTML = `<h4>Saída do auto.arima — mesma série, $d=1$ fixo</h4>
