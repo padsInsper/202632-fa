@@ -57,7 +57,8 @@ validação cruzada, séries hierárquicas, TimeGPT, volatilidade e GARCH.
 
 | Arquivo | Descrição | Download |
 |---|---|---|
-| `bingo_arima.R` | Gerador de séries ARIMA para identificação de ordem | [⬇](https://raw.githubusercontent.com/padsInsper/202632-fa/main/complementar/extras/scripts/bingo_arima.R) |
+| `bingo_arima.R` | Gerador de séries ARIMA para identificação de ordem (R · `fable`/`feasts`) | [⬇](https://raw.githubusercontent.com/padsInsper/202632-fa/main/complementar/extras/scripts/bingo_arima.R) |
+| `bingo_arima.py` | Mesma dinâmica em Python (`statsforecast` + `statsmodels`) | [⬇](https://raw.githubusercontent.com/padsInsper/202632-fa/main/complementar/extras/scripts/bingo_arima.py) |
 | `lab01_python.py` | Exploração de séries em Python | [⬇](https://raw.githubusercontent.com/padsInsper/202632-fa/main/complementar/extras/scripts/lab01_python.py) |
 | `lab01_r.R` | Exploração de séries em R (`tsibble`, `fpp3`) | [⬇](https://raw.githubusercontent.com/padsInsper/202632-fa/main/complementar/extras/scripts/lab01_r.R) |
 
