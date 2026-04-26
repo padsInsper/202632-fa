@@ -919,7 +919,9 @@ function initProjection() {
         <div class="controls">
           <span><kbd>Espaço</kbd> revela / avança</span>
           <span><kbd>←</kbd> volta</span>
-          <span><kbd>Q</kbd> mostra QR grande</span>
+          <span><kbd>V</kbd> mostra/esconde votos</span>
+          <span><kbd>C</kbd> limpa votos</span>
+          <span><kbd>Q</kbd> QR grande</span>
           <span><kbd>R</kbd> reinicia</span>
           ${useFirebase ? "" : "<span><kbd>1-4</kbd> tally manual</span>"}
         </div>
@@ -928,7 +930,7 @@ function initProjection() {
     </div>
   `;
 
-  const state = { index: -1, revealed: false, votes: [0, 0, 0, 0], voterCount: 0, fbDetached: null };
+  const state = { index: -1, revealed: false, showVotes: false, votes: [0, 0, 0, 0], voterCount: 0, fbDetached: null };
   const content = document.getElementById("content");
   const counter = document.getElementById("counter");
   const progress = document.getElementById("progress");
@@ -976,27 +978,63 @@ function initProjection() {
   }
 
   function updateBars() {
-    voteStatusLabel.textContent = useFirebase
-      ? `${state.voterCount} ${state.voterCount === 1 ? "voto" : "votos"}`
-      : `Tally manual · ${state.votes.reduce((a,b)=>a+b,0)} votos`;
+    const totalVotes = state.votes.reduce((a, b) => a + b, 0);
+    const showBars = state.showVotes || state.revealed;
+    const eyeIcon = showBars ? "👁" : "🙈";
+    voteStatusLabel.innerHTML = useFirebase
+      ? `${eyeIcon} ${state.voterCount} ${state.voterCount === 1 ? "voto" : "votos"}`
+      : `${eyeIcon} Tally manual · ${totalVotes} votos`;
     voteStatus.classList.toggle("online", useFirebase);
     voteStatus.classList.toggle("locked", state.revealed);
+    voteStatus.classList.toggle("hidden-bars", !showBars);
 
-    const total = state.votes.reduce((a, b) => a + b, 0) || 1;
+    const total = totalVotes || 1;
     document.querySelectorAll(".opt").forEach(el => {
       const i = +el.dataset.idx;
       const count = state.votes[i] || 0;
       const pct = (count / total) * 100;
       const bar = el.querySelector(".vbar");
-      if (bar) bar.style.width = `${pct}%`;
+      if (bar) bar.style.width = showBars ? `${pct}%` : "0%";
       const c = el.querySelector(".vcount");
       if (c) {
-        c.textContent = state.revealed
-          ? `${count} (${Math.round(pct)}%)`
-          : (count > 0 ? `${count}` : "");
-        c.classList.toggle("show", count > 0 || state.revealed);
+        if (!showBars) {
+          c.textContent = "";
+          c.classList.remove("show");
+        } else {
+          c.textContent = state.revealed
+            ? `${count} (${Math.round(pct)}%)`
+            : (count > 0 ? `${count}` : "");
+          c.classList.toggle("show", count > 0 || state.revealed);
+        }
       }
     });
+  }
+
+  function clearVotes() {
+    if (state.index < 0 || state.index >= Q.length) return;
+    if (sessionRef) {
+      sessionRef.child(`q${state.index}/votes`).remove();
+      sessionRef.child(`q${state.index}/locked`).set(false);
+    }
+    const q = Q[state.index];
+    const optCount = q.type === "tf" ? 2 : q.options.length;
+    state.votes = new Array(optCount).fill(0);
+    state.voterCount = 0;
+    if (state.revealed) {
+      // se já tinha revelado, "des-revelar"
+      state.revealed = false;
+      document.querySelectorAll(".opt").forEach(el => {
+        el.classList.remove("correct", "wrong");
+      });
+      const ex = document.getElementById("explain");
+      if (ex) ex.classList.remove("show");
+    }
+    updateBars();
+  }
+
+  function toggleVotes() {
+    state.showVotes = !state.showVotes;
+    updateBars();
   }
 
   function render() {
@@ -1209,6 +1247,7 @@ function initProjection() {
     if (state.index < Q.length) {
       state.index++;
       state.revealed = false;
+      state.showVotes = false;
       render();
     }
   }
@@ -1216,10 +1255,11 @@ function initProjection() {
     if (state.index > -1) {
       state.index--;
       state.revealed = false;
+      state.showVotes = false;
       render();
     }
   }
-  function restart() { state.index = -1; state.revealed = false; render(); }
+  function restart() { state.index = -1; state.revealed = false; state.showVotes = false; render(); }
 
   // QR overlay toggle
   const qrOverlay = document.getElementById("qrOverlay");
@@ -1234,26 +1274,21 @@ function initProjection() {
       restart();
     } else if (e.key.toLowerCase() === "q") {
       e.preventDefault(); toggleQR();
+    } else if (e.key.toLowerCase() === "c") {
+      if (state.index >= 0 && state.index < Q.length) { e.preventDefault(); clearVotes(); }
+    } else if (e.key.toLowerCase() === "v") {
+      if (state.index >= 0 && state.index < Q.length) { e.preventDefault(); toggleVotes(); }
     } else if (e.key.toLowerCase() === "f") {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
       else document.exitFullscreen?.();
     } else if (!useFirebase && state.index >= 0 && state.index < Q.length && !state.revealed) {
-      // tally manual: 1-4 ou V/F adicionam um voto
+      // tally manual: 1-4 adicionam um voto na opção
       const q = Q[state.index];
       const optCount = q.type === "tf" ? 2 : q.options.length;
-      let idx = -1;
-      if (q.type === "tf") {
-        if (e.key === "1" || e.key.toLowerCase() === "v") idx = 0;
-        else if (e.key === "2" || e.key.toLowerCase() === "f") idx = 1;
-      } else {
-        const map = { "1": 0, "2": 1, "3": 2, "4": 3, "a": 0, "b": 1, "c": 2, "d": 3 };
-        if (map[e.key.toLowerCase()] !== undefined) idx = map[e.key.toLowerCase()];
-      }
-      if (idx >= 0 && idx < optCount) {
+      const map = { "1": 0, "2": 1, "3": 2, "4": 3 };
+      const idx = map[e.key];
+      if (idx !== undefined && idx < optCount) {
         state.votes[idx] = (state.votes[idx] || 0) + 1;
-        updateBars();
-      } else if (e.key.toLowerCase() === "c") {
-        state.votes = new Array(optCount).fill(0);
         updateBars();
       }
     }
