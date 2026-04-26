@@ -1,39 +1,33 @@
 ---
-title: "Exercício: SARIMA no varejo australiano"
-subtitle: "Template — escolha um subset, adapte a análise e discuta"
-format:
-  html:
-    code-fold: false
-    toc: true
-execute:
-  eval: false
+title: "Exercício: SARIMA no comércio varejista brasileiro"
+format: html
 jupyter: python3
 ---
 
 ## Sobre o exercício
 
-A base é `aus_retail` do livro [FPPpy de Hyndman](https://otexts.com/fpppy/data/):
-faturamento mensal por **Estado** × **Indústria** na Austrália, abr/1982 a dez/2018.
-São **152 combinações distintas** — cada aluno escolhe **uma diferente** e
-adapta a análise abaixo. Combine com os colegas para não escolherem o mesmo
-par.
+A base é a **PMC** (Pesquisa Mensal do Comércio) do IBGE — índice de volume
+de vendas no **comércio varejista ampliado** (inclui veículos e materiais de
+construção), por **Unidade da Federação**, mensal de jan/2004 em diante.
+Base 2022 = 100, **sem ajuste sazonal**.
 
-O que você precisa entregar, na sua série:
+Cada aluno escolhe **uma UF distinta** (são 27, sobra para os 25 da turma)
+e adapta a análise abaixo:
 
-1. Inspecionar visualmente (linha, ACF, PACF) e diagnosticar tendência e sazonalidade.
-2. Aplicar testes de raiz unitária (ADF, KPSS) e estimar `ndiffs` por KPSS.
-3. Ajustar um SARIMA via `AutoARIMA(season_length=12)`.
-4. Diagnosticar os resíduos.
-5. Fazer previsão de 24 meses à frente, com intervalos de 80% e 95%.
-6. Comentar: a ordem do SARIMA fez sentido? Os resíduos parecem white noise?
-   A previsão é razoável?
-
-Os imports e helpers seguem o mesmo do `bingo_arima.py` — você pode comparar.
+1. Análise descritiva (linha, ACF, PACF, diferenciação) e diagnóstico de
+   tendência/sazonalidade.
+2. Testes de raiz unitária (ADF, KPSS) e estimativa de `ndiffs`.
+3. Ajuste de SARIMA via `AutoARIMA(season_length=12)`.
+4. Diagnóstico dos resíduos.
+5. Previsão de 24 meses à frente, com intervalos de 80% e 95%.
+6. Discussão dos resultados (perguntas no final).
 
 ## Setup
 
 ```{python}
 import io
+import json
+import gzip
 import urllib.request
 import warnings
 
@@ -45,240 +39,97 @@ from statsmodels.tsa.stattools import adfuller, kpss
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA
+from statsforecast.models import AutoARIMA, ARIMA
 
 warnings.filterwarnings("ignore")
 ```
 
-## Carregando a base FPPpy
-
-O servidor do livro bloqueia o User-Agent default do Python — por isso baixamos
-manualmente com `urllib`.
+## Carregando a base PMC do IBGE/SIDRA
 
 ```{python}
-def fpppy_data(name: str) -> pd.DataFrame:
-    """Baixa um CSV de https://OTexts.com/fpppy/data/<name>."""
-    req = urllib.request.Request(
-        f"https://OTexts.com/fpppy/data/{name}",
-        headers={"User-Agent": "Mozilla/5.0"},
+def fetch_pmc_volume_uf() -> pd.DataFrame:
+    """
+    Baixa a PMC (tabela 8881) — índice de volume de vendas no comércio
+    varejista ampliado, sem ajuste sazonal, por UF (N3), todos os períodos.
+    Variável 7169 = Número-índice (2022=100); classificação 11046[56736] =
+    'Comércio varejista ampliado' (com veículos e materiais de construção).
+
+    Retorna um DataFrame tidy com colunas: uf, data, volume_idx.
+    """
+    url = (
+        "https://servicodados.ibge.gov.br/api/v3/agregados/8881/periodos/all"
+        "/variaveis/7169?localidades=N3[all]&classificacao=11046[56736]"
     )
-    return pd.read_csv(io.BytesIO(urllib.request.urlopen(req, timeout=30).read()))
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0", "Accept-Encoding": "gzip"},
+    )
+    resp = urllib.request.urlopen(req, timeout=60)
+    raw = resp.read()
+    if resp.headers.get("Content-Encoding") == "gzip":
+        raw = gzip.decompress(raw)
+    j = json.loads(raw.decode("utf-8"))
+
+    rows = []
+    for s in j[0]["resultados"][0]["series"]:
+        uf = s["localidade"]["nome"]
+        for ym, val in s["serie"].items():
+            if val and val not in ("..", "...", "-", "x"):
+                rows.append({"uf": uf, "periodo": ym, "volume_idx": float(val)})
+    pmc = pd.DataFrame(rows)
+    pmc["data"] = pd.to_datetime(pmc["periodo"], format="%Y%m")
+    return pmc[["uf", "data", "volume_idx"]].sort_values(["uf", "data"]).reset_index(drop=True)
 
 
-aus_retail = fpppy_data("aus_retail.csv")
-aus_retail["Month"] = pd.to_datetime(aus_retail["Month"])
-aus_retail.head()
+pmc = fetch_pmc_volume_uf()
+print(f"{pmc['uf'].nunique()} UFs, {pmc['data'].nunique()} meses, "
+      f"de {pmc['data'].min():%Y-%m} a {pmc['data'].max():%Y-%m}")
+pmc.head()
 ```
 
-## Quais combinações existem?
-
 ```{python}
-combos = (
-    aus_retail
-    .groupby(["State", "Industry"])
-    .size()
-    .reset_index(name="n_obs")
-    .sort_values(["State", "Industry"])
-    .reset_index(drop=True)
-)
-print(f"Total: {len(combos)} combinações Estado × Indústria")
-combos
+# Visão geral — quantas observações cada UF tem
+pmc.groupby("uf")["data"].agg(["min", "max", "count"]).sort_values("uf")
 ```
 
-## Escolha sua combinação
-
-Edite as duas linhas abaixo com **uma combinação** que ninguém da turma tenha
-escolhido. Sugestões para experimentar comportamentos diferentes:
-
-- *Sazonalidade forte e crescente*: `Department stores` em `Victoria` ou
-  `New South Wales`.
-- *Tendência fraca, sazonalidade dominante*: `Newspaper and book retailing`.
-- *Crescimento agressivo*: `Cafes, restaurants and catering services`.
-- *Mercado pequeno*: qualquer indústria em `Northern Territory` ou
-  `Australian Capital Territory`.
+## Escolha sua UF
 
 ```{python}
-# 👇 Edite aqui
-MEU_STATE = "Victoria"
-MEU_INDUSTRY = "Cafes, restaurants and catering services"
+# 👇 Edite aqui — coloque a UF que você escolheu (idêntica ao nome da tabela acima).
+# Combine com a turma para que cada um pegue uma UF diferente.
+MINHA_UF = "São Paulo"
 
-# Filtra e prepara em formato Nixtla (unique_id, ds, y)
-mask = (aus_retail["State"] == MEU_STATE) & (aus_retail["Industry"] == MEU_INDUSTRY)
 df_sf = (
-    aus_retail.loc[mask, ["Month", "Turnover"]]
-    .dropna()
-    .sort_values("Month")
-    .rename(columns={"Month": "ds", "Turnover": "y"})
-    .assign(unique_id=f"{MEU_STATE} | {MEU_INDUSTRY}")
+    pmc.query("uf == @MINHA_UF")
+    .rename(columns={"uf": "unique_id", "data": "ds", "volume_idx": "y"})
     [["unique_id", "ds", "y"]]
     .reset_index(drop=True)
 )
-print(
-    f"{len(df_sf)} observações de {df_sf['ds'].min():%Y-%m} "
-    f"até {df_sf['ds'].max():%Y-%m}"
-)
-df_sf.head()
+print(f"{len(df_sf)} observações de {df_sf['ds'].min():%Y-%m} até {df_sf['ds'].max():%Y-%m}")
+df_sf
+```
+
+```{python}
+plt.figure(figsize=(11, 4))
+plt.plot(df_sf["ds"], df_sf["y"], color="#E50505", lw=0.9)
+plt.title(f"PMC volume varejo ampliado — {MINHA_UF}")
+plt.ylabel("Índice (2022 = 100)")
+plt.grid(alpha=0.3)
+plt.tight_layout()
 ```
 
 ## Análise descritiva
 
-### 1. Série temporal
-
-```{python}
-fig, ax = plt.subplots(figsize=(12, 4))
-ax.plot(df_sf["ds"], df_sf["y"], color="#E50505", lw=0.9)
-ax.set_title(f"{MEU_INDUSTRY} — {MEU_STATE}")
-ax.set_ylabel("Turnover (A$ milhões)")
-ax.grid(alpha=0.3)
-plt.show()
-```
-
-### 2. ACF e PACF da série original
-
-```{python}
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-plot_acf(df_sf["y"], ax=ax1, lags=36)
-ax1.set_title("ACF")
-plot_pacf(df_sf["y"], ax=ax2, lags=36, method="ywm")
-ax2.set_title("PACF")
-plt.tight_layout()
-plt.show()
-```
-
-### 3. Testes de raiz unitária
-
-```{python}
-def kpss_p(x):
-    """KPSS p-valor (H0: estacionária)."""
-    return kpss(np.asarray(x).astype(float), regression="c", nlags="auto")[1]
-
-
-def ndiffs_kpss(x, alpha=0.05, max_d=2):
-    """Estilo feasts::unitroot_ndiffs: aplica KPSS sucessivamente."""
-    cur = pd.Series(x).dropna().values.astype(float)
-    for d in range(max_d + 1):
-        try:
-            p = kpss_p(cur)
-        except Exception:
-            return d
-        if p > alpha:
-            return d
-        cur = np.diff(cur)
-    return max_d
-
-
-adf_stat, adf_p, *_ = adfuller(df_sf["y"])
-print(f"ADF:           stat = {adf_stat:.3f}   p-valor = {adf_p:.4f}")
-print(f"KPSS:          p-valor = {kpss_p(df_sf['y'].values):.4f}")
-print(f"ndiffs (KPSS): {ndiffs_kpss(df_sf['y'].values)}")
-```
-
-### 4. Diferença sazonal e regular
-
-Para visualizar a estrutura que sobra após eliminar a sazonalidade
-mensal e a tendência:
-
-```{python}
-serie = pd.Series(df_sf["y"].values, index=df_sf["ds"])
-
-# Diferença sazonal (m=12)
-dif_s = serie.diff(12)
-# + diferença regular
-dif_sr = dif_s.diff()
-
-fig, axes = plt.subplots(2, 2, figsize=(12, 7))
-axes[0, 0].plot(dif_s.index, dif_s.values, lw=0.8, color="#06D6A0")
-axes[0, 0].set_title("Diferença sazonal (m=12)")
-axes[0, 0].axhline(0, color="k", lw=0.4)
-axes[0, 0].grid(alpha=0.3)
-plot_acf(dif_s.dropna(), ax=axes[0, 1], lags=36)
-axes[0, 1].set_title("ACF · diferença sazonal")
-axes[1, 0].plot(dif_sr.index, dif_sr.values, lw=0.8, color="#FFD166")
-axes[1, 0].set_title("Sazonal + 1ª diferença regular")
-axes[1, 0].axhline(0, color="k", lw=0.4)
-axes[1, 0].grid(alpha=0.3)
-plot_acf(dif_sr.dropna(), ax=axes[1, 1], lags=36)
-axes[1, 1].set_title("ACF · sazonal + regular")
-plt.tight_layout()
-plt.show()
-```
-
-## Modelagem · SARIMA com AutoARIMA
-
-```{python}
-sf = StatsForecast(
-    models=[AutoARIMA(season_length=12, alias="auto_sarima")],
-    freq="MS",
-    n_jobs=1,
-)
-sf.fit(df=df_sf)
-
-m = sf.fitted_[0][0]
-info = m.model_
-# arma = (p, q, P, Q, m, d, D)
-p_, q_, P_, Q_, mfreq, d_, D_ = info["arma"]
-print(f"Ordem: SARIMA({p_},{d_},{q_})({P_},{D_},{Q_})[{mfreq}]")
-print(f"AICc:  {info['aicc']:.2f}")
-print(f"BIC:   {info['bic']:.2f}")
-```
-
-### Resíduos
-
-```{python}
-res = pd.Series(info["residuals"], index=df_sf["ds"])
-
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-axes[0].plot(res.index, res.values, lw=0.7, color="#888")
-axes[0].axhline(0, color="k", lw=0.5)
-axes[0].set_title("Resíduos no tempo")
-axes[0].grid(alpha=0.3)
-plot_acf(res.dropna(), ax=axes[1], lags=36)
-axes[1].set_title("ACF dos resíduos")
-axes[2].hist(res.dropna(), bins=30, color="#06D6A0", edgecolor="white")
-axes[2].set_title("Histograma dos resíduos")
-plt.tight_layout()
-plt.show()
-```
+## Modelagem
 
 ## Previsão · 24 meses à frente
 
-```{python}
-forecast = sf.forecast(df=df_sf, h=24, level=[80, 95])
-forecast.head()
-```
-
-```{python}
-fig, ax = plt.subplots(figsize=(12, 5))
-ax.plot(df_sf["ds"], df_sf["y"], color="#E50505", lw=0.9, label="Histórico")
-ax.plot(forecast["ds"], forecast["auto_sarima"], color="#06D6A0",
-        lw=1.2, label="Previsão pontual")
-ax.fill_between(
-    forecast["ds"],
-    forecast["auto_sarima-lo-95"], forecast["auto_sarima-hi-95"],
-    color="#06D6A0", alpha=0.15, label="IC 95%",
-)
-ax.fill_between(
-    forecast["ds"],
-    forecast["auto_sarima-lo-80"], forecast["auto_sarima-hi-80"],
-    color="#06D6A0", alpha=0.25, label="IC 80%",
-)
-ax.set_title(f"Previsão · {MEU_INDUSTRY} — {MEU_STATE}")
-ax.set_ylabel("Turnover (A$ milhões)")
-ax.legend()
-ax.grid(alpha=0.3)
-plt.show()
-```
-
-## Sua discussão
+## Discussão
 
 Escreva 4-5 linhas comentando:
 
-1. O ACF/PACF da série original sugeriu sazonalidade? E tendência?
-   Bate com o que você viu no gráfico de linha?
-2. Quantas diferenças (regular e sazonal) o AutoARIMA aplicou? E os
-   componentes AR/MA — viu eles na ACF/PACF da série diferenciada?
+1. O ACF/PACF da série original sugeriu sazonalidade? E tendência? Bate com o que você viu no gráfico de linha?
+2. Quantas diferenças (regular e sazonal) o AutoARIMA aplicou? E os componentes AR/MA? Conseguiu observar isso no ACF/PACF?
 3. Os resíduos parecem white noise? Algum padrão remanescente sazonal?
-4. A previsão pareceu razoável visualmente — captura a sazonalidade,
-   fica bem ancorada no histórico, intervalos abrem com o horizonte?
-5. Que indústrias/estados você imagina que dariam um SARIMA bem diferente
-   do seu?
+4. A previsão pareceu razoável visualmente (captura a sazonalidade, fica bem ancorada no histórico, intervalos abrem muito com o horizonte)?
+5. Que outras UFs você imagina que dariam um SARIMA bem diferente do seu (e por quê)? Pense em estados de regiões diferentes, com perfil econômico distinto.
