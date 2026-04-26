@@ -782,13 +782,13 @@ Q.push({
   title: "Considere o $\\mathrm{AR}(2)$:&nbsp;&nbsp; $Y_t = Y_{t-1} - \\tfrac{1}{2}\\,Y_{t-2} + \\varepsilon_t$.&nbsp;&nbsp; O processo é estacionário?",
   type: "mc",
   options: [
-    "Não — $\\phi_1 = 1$ implica raiz unitária; o processo se comporta como random walk",
-    "Sim — pela fórmula de Bhaskara, raízes $z = 1 \\pm i$, com $|z|=\\sqrt{2}>1$ (fora do círculo unitário)",
-    "Não — $|\\phi_1|=1 \\not< 1$ viola a condição de estacionariedade",
-    "Sim — discriminante negativo garante estabilidade do sistema"
+    "Não — $\\phi_1 = 1$ implica raiz unitária; a série é não-estacionária como um random walk",
+    "Sim — as raízes do polinômio característico são $z = 1 \\pm i$, com $|z|=\\sqrt{2}>1$ (fora do círculo unitário)",
+    "Não — falha na condição $|\\phi_1| + |\\phi_2| < 1$, pois $1 + 0{,}5 = 1{,}5 > 1$",
+    "Sim — discriminante negativo garante raízes complexas, logo o sistema é estável"
   ],
   correct: 1,
-  explain: "<b>É estacionário.</b> O polinômio é $\\Phi(z) = 1 - z + \\tfrac{1}{2}z^2 = 0$, ou equivalentemente $z^2 - 2z + 2 = 0$. Bhaskara: $z = \\dfrac{2 \\pm \\sqrt{4-8}}{2} = \\dfrac{2 \\pm 2i}{2} = 1 \\pm i$. Raízes <i>complexas conjugadas</i>, com módulo $|z| = \\sqrt{1^2+1^2} = \\sqrt{2}\\approx 1{,}41 > 1$ — fora do círculo unitário, então estacionário (com oscilações pseudo-cíclicas amortecidas, típicas de raízes complexas). A (1) ignora o efeito de $\\phi_2$. A (3) tenta estender a regra de AR(1) coeficiente a coeficiente — em AR($p\\geq 2$), o teste é nas raízes do polinômio. A (4) confunde discriminante (real vs. complexa) com módulo (dentro vs. fora do círculo)."
+  explain: "<b>É estacionário.</b> O polinômio característico é $\\Phi(z) = 1 - z + \\tfrac{1}{2}z^2 = 0$, ou equivalentemente $z^2 - 2z + 2 = 0$. Pela fórmula quadrática: $z = \\dfrac{2 \\pm \\sqrt{4-8}}{2} = \\dfrac{2 \\pm 2i}{2} = 1 \\pm i$. Raízes <i>complexas conjugadas</i>, módulo $|z| = \\sqrt{1^2+1^2} = \\sqrt{2}\\approx 1{,}41 > 1$ — fora do círculo unitário, então estacionário (com oscilações pseudo-cíclicas amortecidas, típicas de raízes complexas). <br/>A (1) ignora o efeito de $\\phi_2$ — em AR(2) $\\phi_1$ sozinho não determina nada. A (3) confunde uma condição <i>suficiente</i> ($|\\phi_1|+|\\phi_2|<1$) com uma <i>necessária</i>: quando ela falha, o processo ainda pode ser estacionário; é preciso checar as raízes. A (4) confunde discriminante (raízes reais vs. complexas) com módulo (dentro vs. fora do círculo)."
 });
 
 Q.push({
