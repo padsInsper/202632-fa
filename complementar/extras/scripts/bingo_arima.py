@@ -24,6 +24,7 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 
 from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA, ARIMA
+from statsforecast.arima import arima_string
 
 import warnings
 warnings.filterwarnings("ignore")
