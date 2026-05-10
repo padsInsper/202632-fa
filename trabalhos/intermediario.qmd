@@ -38,9 +38,9 @@ plt.tight_layout()
 plt.show()
 ```
 
-Note como a série principal **dá um salto** logo após jul/2019: a partir
+Note como a série principal fica após jul/2019: a partir
 desse mês, o volume da adquirida passa a entrar no consolidado. É essa
-mudança estrutural que vocês vão ter que tratar na modelagem.
+mudança que vocês vão ter que tratar na modelagem.
 
 ## O que vocês entregam, e quando
 
