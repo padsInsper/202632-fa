@@ -15,6 +15,33 @@ dos próximos **12 meses** da operação para apoiar o planejamento de compras
 e estoque. Vocês têm a série mensal completa desde 2014, incluindo o
 "antes" e o "depois" da aquisição.
 
+```{python}
+#| label: fig-contexto
+#| fig-cap: "Série mensal da Distribuidora BR (azul) e da empresa adquirida no período em que operou separadamente (laranja). A linha vermelha marca o mês da aquisição."
+#| echo: false
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+serie = pd.read_csv("../dados/distribr_serie.csv", parse_dates=["data"])
+adquirida = pd.read_csv("../dados/distribr_adquirida.csv", parse_dates=["data"])
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(serie["data"], serie["valor"], color="C0", label="Distribuidora BR (série principal)")
+ax.plot(adquirida["data"], adquirida["valor"], color="C1", label="Empresa adquirida (período solo)")
+ax.axvline(pd.Timestamp("2019-07-01"), color="red", linestyle="--", linewidth=1, label="Aquisição (jul/2019)")
+ax.set_xlabel("Data")
+ax.set_ylabel("Valor mensal")
+ax.legend(loc="upper left", fontsize=9)
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+Note como a série principal **dá um salto** logo após jul/2019: a partir
+desse mês, o volume da adquirida passa a entrar no consolidado. É essa
+mudança estrutural que vocês vão ter que tratar na modelagem.
+
 ## O que vocês entregam, e quando
 
 | Quando | O quê |
