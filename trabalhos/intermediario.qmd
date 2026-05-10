@@ -1,131 +1,161 @@
 ---
 title: "Trabalho Intermediário"
-subtitle: "Previsão de Série Temporal com Dados Reais"
+subtitle: "Previsão para uma empresa que passou por uma aquisição"
 ---
 
-## Objetivo
+## Contexto
 
-Aplicar os conceitos da **Parte 1** (séries temporais, ARIMA, previsão e validação) a um problema real de previsão. Você receberá uma série temporal mensal real e deverá produzir as **melhores previsões possíveis** para os 12 meses seguintes.
+Vocês formam uma assessoria econômica chamada **PADS Forecasting**.
+Foram contratados pela **Distribuidora BR S.A.**, uma empresa do setor de
+**distribuição de combustíveis no Brasil** que, há alguns anos, **adquiriu
+uma empresa concorrente** do mesmo setor.
 
-::: {.callout-important}
-## Formato da Entrega
-- **Notebook Jupyter** (.ipynb) com código reprodutível
-- **Prazo**: semana de 18 de maio (domingo 24/mai, 23h59)
-- **Individual ou dupla** (indicar no notebook)
-:::
+A diretoria está montando o orçamento do próximo ano e precisa da previsão
+dos próximos **12 meses** da operação para apoiar o planejamento de compras
+e estoque. Vocês têm a série mensal completa desde 2014, incluindo o
+"antes" e o "depois" da aquisição.
 
-## O Desafio
+## O que vocês entregam, e quando
 
-Você receberá uma série temporal mensal com dados até um certo ponto. Os **últimos 12 meses foram ocultados** — eles serão usados para avaliar suas previsões. Você não sabe qual é a série (e não deve tentar descobrir durante o desafio).
+| Quando | O quê |
+|---|---|
+| **Sex 22/mai, 18h–20h** | Apresentação do grupo e discussão (entrega: notebook e `previsao.csv`) |
+| **Sáb 23/mai, 15h–17h** | Construção da previsão de consenso da turma |
 
-### Dados
+## Avaliação
 
-O dataset será disponibilizado no repositório do curso em formato CSV. A série:
+A avaliação tem 4 componentes, totalizando 10 pontos:
 
-- Tem frequência **mensal**
-- Possui **sazonalidade** clara
-- Tem pelo menos 5 anos de histórico
-- É uma série real de negócios/economia
+| Componente | Pontos |
+|---|---|
+| Relatório (notebook) | 3,0 |
+| Apresentação na sexta (pitch e discussão) | 3,0 |
+| (Competitivo) Previsão do grupo (ranking MASE) | 3,0 |
+| (Colaborativo) Previsão de consenso da turma (todos recebem o mesmo) | 1,0 |
 
-### O que entregar
+## Dados
 
-Seu notebook deve conter **obrigatoriamente**:
+Os dois arquivos abaixo estão no repositório do curso, na pasta `dados/`.
+Os links de download direto:
 
-### 1. Análise Exploratória (20%)
+- [📥 `distribr_serie.csv`](https://raw.githubusercontent.com/padsInsper/202632-fa/main/dados/distribr_serie.csv):
+  série mensal principal da Distribuidora BR, jan/2014 a dez/2023
+  (120 meses). Os 12 meses de 2024 foram **ocultados** e serão usados
+  para avaliar a precisão das previsões.
+- [📥 `distribr_adquirida.csv`](https://raw.githubusercontent.com/padsInsper/202632-fa/main/dados/distribr_adquirida.csv):
+  série mensal da empresa **adquirida**, cobrindo só o período em que
+  ela operou separadamente (antes da aquisição). Uso opcional.
 
-- Gráfico da série temporal
-- Decomposição (clássica ou STL) — explique os componentes considerando o aspecto da série
-- ACF e PACF da série original e diferenciada
-- Testes de estacionariedade (ADF e KPSS) com **conclusão explícita sobre tendência estocástica**
-- Identificação de sazonalidade (e sua periodicidade), tendência e outliers
-- Discussão: o que os dados "dizem"?
+Cada CSV tem duas colunas: `data` (primeiro dia de cada mês) e `valor`.
 
-### 2. Modelagem (30%)
+## O que entregar no notebook (3 pontos)
 
-- Pelo menos **3 modelos candidatos** (ex: ARIMA, SARIMA, ETS, Prophet)
-- Justificativa para a escolha de cada modelo — critérios de informação e/ou etapa de
-  identificação da abordagem Box-Jenkins
-- Uso de `statsforecast.AutoARIMA` ou identificação manual via Box-Jenkins
-- Parâmetros estimados e sua interpretação
-- **Diagnóstico residual**: verificar se os resíduos do modelo ARIMA/SARIMA escolhido
-  se comportam como ruído branco (ACF dos resíduos, teste de Ljung-Box)
+1. **Descrição inicial dos dados**: gráfico da série mostrando o degrau
+   da aquisição, decomposição em tendência, sazonalidade e resíduo, testes
+   ADF e KPSS com conclusão escrita, identificação de sazonalidade e
+   outliers visíveis.
 
-### 3. Validação Cruzada Temporal (25%)
+2. **Como vocês trataram o degrau da aquisição**. Descrevam a abordagem
+   escolhida e a justificativa. Por exemplo, se decidiram descartar o
+   histórico pré-aquisição, expliquem por que os dados antigos não são
+   relevantes para prever o futuro. Outras abordagens são possíveis:
+   discutam, decidam e defendam usando evidências dos dados.
 
-- Implementação de **time series cross-validation** (expanding ou sliding window)
-- Cálculo de **MAE, RMSE e MASE** para cada modelo
-- Comparação dos modelos em tabela e/ou gráfico
-- Discussão: qual modelo é melhor e por quê?
+3. **Comparação de modelos**, com justificativa (SARIMA,
+   ETS, Prophet, machine learning, etc.). Diagnóstico residual (ACF dos
+   resíduos, teste de Ljung-Box) do modelo escolhido.
 
-### 4. Previsão Final (15%)
+4. **Validação cruzada temporal** com MAE, RMSE e MASE. Sugerimos comparar
+   contra um baseline ingênuo (`SeasonalNaive`).
 
-- Previsão de **12 meses** à frente com o melhor modelo
-- Intervalos de confiança de 80% e 95%
-- Gráfico com a série histórica + previsão + intervalos
-- Arquivo `previsao.csv` com colunas: `data`, `previsao`, `ic_80_inf`, `ic_80_sup`, `ic_95_inf`, `ic_95_sup`
+5. **Previsão final** dos próximos 12 meses com intervalos de 80% e 95%,
+   gráfico, e o arquivo `previsao.csv` (colunas: `data`, `previsao`).
 
-### 5. Discussão (10%)
+6. **Discussão e decisões**: uma seção curta listando 3 a 5 decisões
+   importantes tomadas no trabalho. Para cada uma:
+   - Qual era a escolha?
+   - O que fez vocês decidirem por aquele caminho? Cite o gráfico, o
+     teste, a métrica que usaram.
+   - O que foi descartado e por quê?
 
-- Limitações do modelo escolhido
-- O que poderia melhorar com mais dados ou técnicas avançadas?
-- Se esta fosse uma previsão para decisão de negócio, quais cuidados adicionais você teria?
+7. **Descrição de uso de IA**: uma seção curta no final do notebook,
+   contando que ferramentas usaram, em que partes elas ajudaram mais, e
+   alguma sugestão da IA que vocês rejeitaram, com a justificativa.
+   Depois compartilhamos as experiências na turma para todo mundo aprender.
 
-## Critérios de Avaliação
+**Obs**: Recomendamos escrever 6 e 7 sem usar IA.
 
-| Critério | Peso | Excelente | Adequado | Insuficiente |
-|----------|------|-----------|----------|-------------|
-| Exploratória | 20% | Completa, com insights | Básica mas correta | Incompleta |
-| Modelagem | 30% | Múltiplos modelos justificados | 2-3 modelos sem justificativa profunda | Apenas 1 modelo |
-| Validação | 25% | CV temporal correto, métricas comparadas | CV feito mas com falhas | Sem CV ou com leakage |
-| Previsão | 15% | Acurácia alta, intervalos calibrados | Acurácia razoável | Previsão pobre |
-| Discussão | 10% | Reflexão crítica e profunda | Superficial | Ausente |
+**Como entra na nota (3 pontos)**:
 
-::: {.callout-tip}
-## Dicas
-1. **Não complique demais**: um SARIMA bem ajustado geralmente supera modelos complexos mal calibrados
-2. **Valide antes de prever**: use cross-validation temporal, não apenas um split treino/teste
-3. **Interprete seus resultados**: não basta gerar números — explique o que eles significam
-4. **Código limpo**: use funções, comentários e organize seu notebook em seções claras
-5. **statsforecast** é seu amigo: `AutoARIMA`, `AutoETS` e `AutoCES` facilitam a comparação
-:::
+| Critério | Pontos |
+|---|---|
+| Descrição dos dados (item 1) | 0,5 |
+| Modelos comparados e diagnóstico (item 3) | 0,5 |
+| Validação cruzada temporal (item 4) | 0,5 |
+| Previsão final e gráfico (item 5) | 0,5 |
+| Discussão e decisões (item 6) | 0,5 |
+| Descrição de uso de IA (item 7) | 0,5 | 
 
-## Competição (Bônus)
+## Apresentação na sexta (3 pontos)
 
-As previsões serão avaliadas contra os dados reais ocultos usando **MASE**. Os 3 melhores resultados receberão bônus na nota:
+Cada grupo apresenta brevemente o que fez, a turma comenta, e todos saem com
+ideias para o sábado.
 
-| Posição | Bônus |
-|---------|-------|
-| 1º lugar | +1.0 ponto |
-| 2º lugar | +0.7 ponto |
-| 3º lugar | +0.5 ponto |
+O pitch precisa responder (não diretamente, mas no meio da apresentação):
 
-A métrica de ranking é o **MASE** (Mean Absolute Scaled Error) — ela permite comparação justa independente da escala da série.
+- Qual estratégia de análise adotaram?
+- Que modelo escolheram, e como ele funciona?
+- Qual foi a decisão mais difícil que tomaram?
+- Por que acham que a previsão de vocês é boa?
 
-## Desafio adicional: série de periodicidade desconhecida (2 pontos extras)
+**Como entra na nota (3 pontos)**:
 
-::: {.callout-important}
-## Base `dados_amostra.csv`
-Será disponibilizada no repositório do curso uma base contendo uma segunda série temporal
-cuja **periodicidade não é informada** (pode ser diária, horária, semanal etc.).
-As **18 observações mais recentes foram ocultadas** propositalmente para avaliar a
-qualidade da sua previsão.
-:::
+| Critério | Pontos |
+|---|---|
+| Coesão narrativa, clareza na comunicação, conexão com negócio | 1,0 |
+| Precisão técnica na descrição dos modelos | 1,0 |
+| Capacidade de responder perguntas e defender escolhas | 1,0 |
 
-Seu objetivo:
+## Previsão do grupo (3 pontos)
 
-a. Ajustar modelos de séries temporais apropriados (pode escolher modelos vistos em sala
-   e outros não vistos — DARTS, NBEATS, XGBoost, o que preferir).
-b. Escolher o melhor modelo via **backtest** e métricas de validação apropriadas.
-c. Usar o modelo para prever as próximas **18 observações**.
-d. Exportar as previsões em `previsao_amostra.csv` e submeter junto com a entrega principal.
+A previsão de cada grupo é avaliada contra os 12 meses ocultados de 2024,
+usando a métrica **MASE**. Pontos por **ranking entre os grupos** serão
+computados de acordo com o MASE, proporcional à distância para o `SeasonalNaive`.
 
-Essa questão será avaliada pelo **RMSE** sobre as 18 observações ocultadas; os grupos
-com melhores predições recebem bônus adicional na nota do trabalho.
+O `SeasonalNaive` é o baseline. Ele será o marcador de 1,5 pontos: 
+se a previsão de um grupo tiver MASE igual, ganha 1,5 pontos. 
+Se for melhor, ganha mais; se for pior, ganha menos. Vamos ajustar
+a pontuação de forma que o primeiro lugar receba 3 pontos. O último
+lugar pode ficar com um pouco mais de 0, mas não pode ficar negativo.
 
-## Referências e materiais de apoio
+## Previsão de consenso no sábado (1 ponto)
 
-- Notebooks originais da Profa. Paloma disponíveis em
-  [Materiais Complementares](../complementar/index.qmd), em especial
-  `aula03-darts-forecasting.ipynb` para alternativas ao SARIMA/Prophet.
-- Livro-base: Hyndman & Athanasopoulos, *Forecasting: Principles and Practice* (3ª ed.,
-  FPP3).
+Depois de ouvir os pitches da sexta, vocês têm a noite para pensar. No
+sábado, a turma constrói uma **previsão única de consenso** e a submete.
+
+**Estrutura (2h)**:
+
+Após a abertura, iniciamos um debate. Os alunos defendem suas propostas.
+Se ficar difícil de acompanhar as discussões, faremos inscrições para falar. 
+O objetivo é chegar a um consenso sobre qual previsão adotar como a "previsão da turma".
+
+**Dica**: A previsão de consenso pode ser:
+
+- A previsão de um dos grupos que a turma concorda ser a melhor
+- Uma média (simples ou ponderada) das previsões
+- Uma combinação de abordagens diferentes
+- Outra estratégia que a turma achar melhor
+
+Não há votação formal: o consenso é construído na discussão.
+
+**Como entra na nota (1 ponto)**: a previsão de consenso é avaliada
+contra os 12 meses ocultados pelo MASE e comparada às previsões
+individuais. **Todos os alunos recebem a mesma pontuação**:
+
+| Posição da previsão de consenso entre as submissões | Pontos para todos |
+|---|---|
+| Entre as 2 melhores | 1,0 |
+| Acima da mediana | 0,5 |
+| Abaixo da mediana mas melhor que `SeasonalNaive` | 0,2 |
+| Pior que `SeasonalNaive` | 0,0 |
+

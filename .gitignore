@@ -21,5 +21,12 @@ manual_marca/
 dados/serie_gabarito.csv
 dados/serie_completa.csv
 dados/preparar_serie.py
+dados/*_PRIVADO.csv
+dados/preparar_vibra.py
+dados/preparar_stellantis.py
+dados/stellantis_*.csv
+dados/README_distribr.md
+trabalhos/intermediario_solucao.qmd
+_freeze/trabalhos/intermediario_solucao/
 
 materiais_paloma/
