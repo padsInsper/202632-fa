@@ -19,6 +19,7 @@ e estoque. Vocês têm a série mensal completa desde 2014, incluindo o
 #| label: fig-contexto
 #| fig-cap: "Série mensal da Distribuidora BR (azul) e da empresa adquirida no período em que operou separadamente (laranja). A linha vermelha marca o mês da aquisição."
 #| echo: false
+#| out-width: 100%
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -32,7 +33,7 @@ ax.plot(adquirida["data"], adquirida["valor"], color="C1", label="Empresa adquir
 ax.axvline(pd.Timestamp("2019-07-01"), color="red", linestyle="--", linewidth=1, label="Aquisição (jul/2019)")
 ax.set_xlabel("Data")
 ax.set_ylabel("Valor mensal")
-ax.legend(loc="upper left", fontsize=9)
+ax.legend(loc="lower right", fontsize=9)
 ax.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
