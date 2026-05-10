@@ -50,12 +50,12 @@ Cada CSV tem duas colunas: `data` (primeiro dia de cada mês) e `valor`.
 
 ## O que entregar no notebook (3 pontos)
 
-1. **Descrição inicial dos dados**: gráfico da série mostrando o degrau
-   da aquisição, decomposição em tendência, sazonalidade e resíduo, testes
+1. **Descrição inicial dos dados**: gráfico da série mostrando
+   a aquisição, decomposição em tendência, sazonalidade e resíduo, testes
    ADF e KPSS com conclusão escrita, identificação de sazonalidade e
    outliers visíveis.
 
-2. **Como vocês trataram o degrau da aquisição**. Descrevam a abordagem
+2. **Como vocês trataram a aquisição**. Descrevam a abordagem
    escolhida e a justificativa. Por exemplo, se decidiram descartar o
    histórico pré-aquisição, expliquem por que os dados antigos não são
    relevantes para prever o futuro. Outras abordagens são possíveis:
