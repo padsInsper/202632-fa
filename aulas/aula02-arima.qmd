@@ -528,12 +528,12 @@ A diferenciação sazonal $\Delta_s$ frequentemente **já remove parte da tendê
 Antes de rodar `AutoARIMA`, faça (nesta ordem):
 
 1. **Plot da série completa** — identifique se há sazonalidade visível e qual o período $s$ (12 para mensal anual, 4 para trimestral, 7 para diária semanal, 24 para horária diária).
-2. **Decomposição STL** — confirme o período e estime a força sazonal $F_s$. Se $F_s > 0{,}64$, a sazonalidade é forte o suficiente para justificar $D = 1$; se $F_s$ é baixa, sazonalidade pode ser melhor tratada como **determinística** (dummies, Fourier).
-3. **Subseries plot / boxplot por mês (ou unidade do ciclo)** — verifique se a amplitude sazonal é estável (sugere sazonalidade aditiva) ou cresce com o nível (sugere log/Box-Cox antes de modelar).
+2. **Decomposição STL** — rode a decomposição e olhe o gráfico: a componente sazonal é nítida e regular? A tendência é clara? Isso já dá um diagnóstico visual da força de cada componente.
+3. **Boxplot por unidade do ciclo** (mês, trimestre, dia da semana) — observe se a amplitude sazonal é estável ou cresce com o nível da série.
 4. **ACF da série original** — picos persistentes em $s, 2s, 3s, \ldots$ que decaem lentamente são assinatura de sazonalidade estocástica (requer $\Delta_s$).
-5. **ACF/PACF de $\Delta_s Y_t$** — depois da diferença sazonal, reavalie se ainda há tendência (decaimento lento na ACF não-sazonal). Se sim, aplique também $\Delta$ regular.
+5. **ACF/PACF de $\Delta_s Y_t$ + teste de raiz unitária** — depois da diferença sazonal, rode um **KPSS** ou **ADF** para decidir objetivamente se ainda falta diferenciar regularmente, e use a ACF/PACF para identificar $(p, q, P, Q)$.
 
-Só então identifique $(p, q, P, Q)$ na série duplamente diferenciada $\Delta\Delta_s Y_t$ — essa é a ordem que o `AutoARIMA` também segue.
+Essa é a ordem que o `AutoARIMA` também segue.
 :::
 
 ::: {.callout-note}
