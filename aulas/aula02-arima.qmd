@@ -500,7 +500,7 @@ O `AutoARIMA` do `statsforecast` (baseado no algoritmo de Hyndman-Khandakar) seg
 
 ```{mermaid}
 flowchart LR
-    A["Testes de raiz<br/>unitária → d"] --> B["KPSS para<br/>sazonalidade → D"]
+    A["Heurística STL<br/>sazonal → D"] --> B["KPSS na série<br/>já diferenciada<br/>sazonalmente → d"]
     B --> C["Modelo inicial<br/>stepwise"]
     C --> D["Variações ±1<br/>em p, q, P, Q"]
     D --> E{AICc<br/>melhorou?}
@@ -511,10 +511,49 @@ flowchart LR
     style F fill:#3ACC9F,color:#fff
 ```
 
-1. **Determina $d$** via KPSS (máximo 2 diferenciações)
-2. **Determina $D$** via teste de sazonalidade (se $s > 1$)
-3. **Busca stepwise**: começa com modelos simples e varia $p, q, P, Q$ em ±1, mantendo o que reduz AICc
-4. **Retorna o melhor** segundo AICc
+1. **Determina $D$ primeiro** (se $s > 1$) com a heurística sazonal padrão (`test="seas"`): aplica uma decomposição STL e mede a **força sazonal** $F_s = \max\{0,\, 1 - \mathrm{Var}(R_t)/\mathrm{Var}(R_t + S_t)\}$; se $F_s > 0{,}64$, aplica $\Delta_s$ e repete até $D = \max\_D$ (default 1). Esse limiar de 0,64 vem de Wang, Smith & Hyndman (2006).
+2. **Determina $d$ depois**, via KPSS sobre a série **já diferenciada sazonalmente** $\Delta_s^{D} Y_t$ (máximo 2 diferenciações regulares).
+3. **Busca stepwise**: começa com modelos simples e varia $p, q, P, Q$ em ±1, mantendo o que reduz AICc.
+4. **Retorna o melhor** segundo AICc.
+
+::: {.callout-important}
+## Por que a ordem $D \to d$ importa
+
+A diferenciação sazonal $\Delta_s$ frequentemente **já remove parte da tendência** (porque $Y_t - Y_{t-s}$ elimina componentes que variam suavemente em horizonte maior que $s$). Por isso o algoritmo aplica `nsdiffs` **antes** de `ndiffs` — testar a estacionariedade regular numa série que ainda carrega sazonalidade estocástica leva a KPSS confundir o ciclo sazonal com tendência e a um $d$ inflado. A regra prática é a mesma na análise manual: **primeiro remova a sazonalidade, depois decida se ainda falta diferenciar regularmente**.
+:::
+
+::: {.callout-tip}
+## Como deve ser a análise descritiva de uma série sazonal
+
+Antes de rodar `AutoARIMA`, faça (nesta ordem):
+
+1. **Plot da série completa** — identifique se há sazonalidade visível e qual o período $s$ (12 para mensal anual, 4 para trimestral, 7 para diária semanal, 24 para horária diária).
+2. **Decomposição STL** — confirme o período e estime a força sazonal $F_s$. Se $F_s > 0{,}64$, a sazonalidade é forte o suficiente para justificar $D = 1$; se $F_s$ é baixa, sazonalidade pode ser melhor tratada como **determinística** (dummies, Fourier).
+3. **Subseries plot / boxplot por mês (ou unidade do ciclo)** — verifique se a amplitude sazonal é estável (sugere sazonalidade aditiva) ou cresce com o nível (sugere log/Box-Cox antes de modelar).
+4. **ACF da série original** — picos persistentes em $s, 2s, 3s, \ldots$ que decaem lentamente são assinatura de sazonalidade estocástica (requer $\Delta_s$).
+5. **ACF/PACF de $\Delta_s Y_t$** — depois da diferença sazonal, reavalie se ainda há tendência (decaimento lento na ACF não-sazonal). Se sim, aplique também $\Delta$ regular.
+
+Só então identifique $(p, q, P, Q)$ na série duplamente diferenciada $\Delta\Delta_s Y_t$ — essa é a ordem que o `AutoARIMA` também segue.
+:::
+
+::: {.callout-note}
+## Heurística vs. teste estatístico para $D$
+
+O default do `statsforecast` (`test="seas"`) **não é um teste estatístico** — é a heurística de força sazonal de Wang, Smith & Hyndman (2006), baseada em STL e com corte fixo em 0,64. Vantagens: rápida, robusta a séries curtas e a períodos não-inteiros. Limitação: não dá $p$-valor.
+
+Alternativas via `seasonal_test_kwargs`:
+
+- `test="ocsb"` — teste **OCSB** (Osborn, Chui, Smith & Birchenhall, 1988): regressão auxiliar com termos $\Delta_s$ e $\Delta$, testa se o coeficiente sazonal é zero. Único teste estatístico genuíno implementado; nível de significância fixo em 5%.
+- `test="hegy"` e `test="ch"` (Canova-Hansen) — listados na assinatura mas **não implementados** (lançam `NotImplementedError`).
+
+Para a maioria dos casos práticos a heurística basta; use OCSB quando precisar de evidência inferencial sobre a presença de raiz unitária sazonal.
+:::
+
+**Referências:**
+
+- Hyndman, R. J., & Khandakar, Y. (2008). Automatic time series forecasting: The forecast package for R. *Journal of Statistical Software*, 27(3). DOI: [10.18637/jss.v027.i03](https://doi.org/10.18637/jss.v027.i03)
+- Wang, X., Smith, K. A., & Hyndman, R. J. (2006). Characteristic-based clustering for time series data. *Data Mining and Knowledge Discovery*, 13(3), 335–364. DOI: [10.1007/s10618-005-0039-x](https://doi.org/10.1007/s10618-005-0039-x)
+- Osborn, D. R., Chui, A. P. L., Smith, J. P., & Birchenhall, C. R. (1988). Seasonality and the order of integration for consumption. *Oxford Bulletin of Economics and Statistics*, 50(4), 361–377.
 
 ::: {.callout-warning}
 ## Armadilhas do AutoARIMA
