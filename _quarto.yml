@@ -36,7 +36,7 @@ website:
             href: aulas/aula03-sarima.qmd
           - text: "Aula 4: Previsão e Validação (11/mai)"
             href: aulas/aula04-previsao.qmd
-          - text: "Lab 2: Pipeline de Previsão (18/mai)"
+          - text: "Lab 2: ML para Séries Temporais (18/mai)"
             href: labs/lab02-pipeline.qmd
           - text: "---"
           - text: "Trabalho Intermediário"
@@ -71,6 +71,8 @@ website:
             href: complementar/aula02-arima-prophet-notebook.ipynb
           - text: "Aula 4: DARTS forecasting (notebook)"
             href: complementar/aula03-darts-forecasting.ipynb
+          - text: "Lab 2: ML para séries (notebook)"
+            href: complementar/lab02-ml-series-notebook.ipynb
           - text: "---"
           - text: "Aula 5: Volatilidade — arch (Python)"
             href: complementar/aula04-volatilidade-arch-python.ipynb

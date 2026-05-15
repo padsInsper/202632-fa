@@ -1,301 +1,888 @@
 ---
-title: "Lab 2: Pipeline de Previsão End-to-End"
-subtitle: "Do dado bruto ao forecast validado"
+title: "Lab 2: Machine Learning para Séries Temporais"
+subtitle: "Do feature engineering aos foundation models — overview prático + tempo de trabalho intermediário"
+format:
+  html:
+    code-fold: show
 ---
 
 ::: {.objetivos}
 #### Objetivos do Lab
 
-- [Aplicar]{.bloom-badge .bloom-aplicar} o procedimento Box-Jenkins completo em Python
-- [Analisar]{.bloom-badge .bloom-analisar} resultados de diagnóstico e critérios de informação
-- [Avaliar]{.bloom-badge .bloom-avaliar} modelos via cross-validation temporal
-- [Criar]{.bloom-badge .bloom-criar} um pipeline reprodutível de previsão
+- [Reconhecer]{.bloom-badge .bloom-lembrar} as principais tarefas e famílias de modelos de ML para séries temporais
+- [Analisar]{.bloom-badge .bloom-analisar} o que muda em relação ao ML tabular tradicional
+- [Aplicar]{.bloom-badge .bloom-aplicar} feature engineering temporal (clássico + FFT) e rodar modelos de ML reais
+- [Avaliar]{.bloom-badge .bloom-avaliar} o trade-off entre modelos clássicos, ML, deep learning e foundation models
+- [Criar]{.bloom-badge .bloom-criar} o esqueleto da entrega intermediária com apoio do monitor
 :::
 
-## Setup
+## Como o lab está organizado (3h30)
+
+| Bloco | Tempo | O que vamos fazer |
+|---|---|---|
+| **0. Revisão da Parte 1** | 20 min | Recap relâmpago (decomposição, ARIMA/SARIMA, validação) |
+| **Parte 1 — ML "tabular" para séries** | 40 min | Feature engineering (básico → FFT) + rodar modelos (sklearn, MLForecast, DARTS) |
+| **Parte 2 — Modelos com a ordem na arquitetura** | 35 min | ARIMA → ARIMA-Boost → ETS → redes neurais → foundation models |
+| **Trabalho intermediário (office hours)** | 115 min | Tempo dedicado para a entrega — o monitor circula |
+
+::: {.callout-tip}
+## Filosofia do bloco de conteúdo
+Este é um **overview-referência**, não uma aula completa. A meta é que vocês saiam sabendo *o que existe lá fora*, *como cada família funciona por dentro* e *quando vale a pena experimentar* — não dominando cada arquitetura. Tudo aqui é material para revisitar depois; as referências no final são o ponto de partida para aprofundar.
+:::
+
+::: {.caso-negocio}
+#### O caso que vai nos acompanhar o lab inteiro
+
+Vocês são a assessoria **PADS Forecasting**. Uma **montadora de veículos** quer prever a **produção mensal de veículos no Brasil** para planejar compras de aço, turnos de fábrica e logística. Usaremos a série real do Banco Central (**SGS 1373 — produção de veículos, unidades**). Ela tem três ingredientes que fazem dela um caso de aula perfeito:
+
+1. **Sazonalidade forte** — dezembro despenca (férias coletivas), agosto/outubro são picos.
+2. **Um choque brutal** — março/2020 caiu para **1.847 unidades** (fábricas paradas na COVID). Outlier de manual.
+3. **Tendência com regimes** — recessão 2015–16, colapso e recuperação pós-COVID.
+
+A mesma série será o fio condutor da Parte 1 e da Parte 2.
+:::
+
+# Bloco 0 — Revisão da Parte 1 (20 min)
+
+::: {.callout-note}
+## Os 5 pilares da Parte 1
+
+1. **Decomposição.** $Y_t = T_t + S_t + R_t$ (aditiva) ou $T_t \cdot S_t \cdot R_t$ (multiplicativa). STL é a ferramenta moderna.
+2. **Estacionariedade.** ARMA exige média e variância estáveis. ADF (H0: raiz unitária) e KPSS (H0: estacionária) são complementares.
+3. **ACF/PACF.** A "impressão digital": AR(p) → PACF corta em $p$; MA(q) → ACF corta em $q$; decaimento lento → diferenciar.
+4. **ARIMA/SARIMA.** Box-Jenkins: identifica → estima → diagnostica. AutoARIMA automatiza via AICc.
+5. **Validação temporal.** Nunca embaralhe. *Expanding* ou *sliding window*. Métricas: MAE, RMSE, MAPE (cuidado com zero), MASE.
+:::
+
+::: {.callout-caution collapse="true"}
+## Mini-quiz Q1. ACF decai exponencialmente e PACF corta no lag 1. Que modelo?
+**AR(1)**. Assinatura do AR(p): PACF significativa até o lag $p$ e depois zero, com ACF decaindo geometricamente.
+:::
+
+::: {.callout-caution collapse="true"}
+## Mini-quiz Q2. ADF rejeita H0 e KPSS também rejeita. O que significa?
+**Conflito — provavelmente *trend stationary*.** A série pode ser estacionária ao redor de uma tendência determinística. Estratégias: regredir contra $t$; diferenciar e reavaliar; inspeção visual.
+:::
+
+::: {.callout-caution collapse="true"}
+## Mini-quiz Q3. Quando preferir Prophet a SARIMA?
+**Sazonalidade múltipla, feriados estruturados, changepoints conhecidos.** Prophet é $g(t)+s(t)+h(t)+\varepsilon_t$ com sazonalidade Fourier. Para séries financeiras, ARIMA+GARCH ainda é mais adequado (volatilidade condicional).
+:::
+
+::: {.callout-tip}
+## Revisão por conta própria
+Se algo ficou nebuloso: [FPP3 Cap. 5](https://otexts.com/fpp3/toolbox.html), [FPP3 Cap. 9](https://otexts.com/fpp3/arima.html) e o notebook do Lab 1.
+:::
+
+## O que muda no ML para séries
+
+ML tradicional assume **i.i.d.**: cada linha é independente. Em séries, isso é falso — o passado prevê o futuro.
+
+| Aspecto | ML tabular clássico | ML para séries temporais |
+|---|---|---|
+| Suposição | Amostras i.i.d. | Dependência temporal explícita |
+| Train/test split | Aleatório (k-fold) | **Cronológico** (expanding/sliding) |
+| Embaralhamento | Sim | **Nunca** — quebra causalidade |
+| *Leakage* típico | Vars derivadas do alvo | **Usar futuro p/ prever passado** |
+| Features dominantes | Atributos do exemplo | **Lags, janelas, calendário, eventos** |
+| Métrica | Acurácia, F1, AUC | RMSE, MAE, MASE, pinball loss |
+| Pipeline | `fit → predict` | `fit → forecast(h)` (recursivo/direto) |
+
+::: {.callout-warning}
+## As 3 fontes silenciosas de *data leakage*
+1. **Normalização global.** `mean`/`std` da série inteira antes do split usa o futuro.
+2. **Imputação retrospectiva.** Preencher `NaN` de 2020 com a média de 2024.
+3. **Features que olham para frente.** `rolling()` centrado, `shift(-1)` por engano.
+
+Regra de ouro: o que entra no modelo em $t$ só pode usar informação **até $t$**.
+:::
+
+### As 8 tarefas (Oudre)
+
+ML para séries não é só "prever o próximo valor":
+
+| Tarefa | O que faz | Exemplo de negócio |
+|---|---|---|
+| **Predição (forecasting)** | Estimar futuro | Produção do próximo trimestre |
+| **Completion / interpolação** | Recuperar faltantes | Sensor offline, feriado sem cotação |
+| **Classificação** | Rotular série/subsequência | Fraude vs. transação normal |
+| **Clustering** | Agrupar perfis | Segmentar lojas por padrão de venda |
+| **Indexação / busca** | Achar séries parecidas | "Que ações se moveram como X em 2008?" |
+| **Change-point** | Detectar quebras | Quebra estrutural em produção |
+| **Detecção de anomalias** | Eventos fora do padrão | *Flash crash*, pico de tráfego |
+| **Extração de padrões** | Motivos repetidos | Sazonalidade não-óbvia |
+
+Adaptado de [Oudre (2023)](https://www.laurentoudre.fr/ast/AST0.pdf). Nosso foco é **predição**, mas detecção de anomalias e classificação usam as mesmas ferramentas.
+
+# Parte 1 — ML "tabular" para séries (40 min)
+
+A grande ideia do ML aplicado a séries: **transformar o problema temporal em um problema tabular** via *features*, e jogar um modelo de regressão usual em cima.
+
+```{mermaid}
+flowchart LR
+    A["Série y_t<br/>(SGS 1373)"] --> B["Feature engineering<br/>lags · rolling · calendário · FFT"]
+    B --> C["Matriz X tabular<br/>(uma linha por mês)"]
+    C --> D["Modelo de regressão<br/>GBM · LightGBM · MLP"]
+    D --> E["Validação cruzada<br/>temporal (expanding)"]
+    E --> F["Forecast h=12<br/>+ intervalos"]
+    style A fill:#E50505,color:#fff
+    style C fill:#FFCC00,color:#000
+    style F fill:#3ACC9F,color:#fff
+```
+
+## 1.1 Setup e os dados
 
 ```{python}
-import pandas as pd
+#| label: setup
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.express as px
-import plotly.graph_objects as go
 
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.stattools import adfuller, kpss
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
-from statsmodels.stats.diagnostic import acorr_ljungbox
-from statsmodels.tsa.seasonal import STL
+INSPER_RED = "#E50505"
+INSPER_TURQUESA = "#3ACC9F"
+INSPER_AMARELO = "#FFCC00"
+INSPER_GRAY = "#5B5B5B"
 
-from statsforecast import StatsForecast
-from statsforecast.models import AutoARIMA, SeasonalNaive, Naive
+plt.rcParams.update({
+    "figure.figsize": (12, 5),
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "font.size": 12,
+})
+```
 
+```{python}
+#| label: dados
+# SGS 1373 — produção de veículos no Brasil (unidades, mensal)
+url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1373/dados?formato=csv&dataInicial=01/01/2012"
+df = pd.read_csv(url, sep=";", decimal=",")
+df["data"] = pd.to_datetime(df["data"], format="%d/%m/%Y")
+df = df.set_index("data").sort_index().rename(columns={"valor": "y"})
+df = df.asfreq("MS")
+df["y"] = df["y"].interpolate()
+
+print(f"Série: {len(df)} meses, de {df.index.min().date()} a {df.index.max().date()}")
+df.tail(3)
+```
+
+```{python}
+#| label: fig-serie
+fig, ax = plt.subplots(figsize=(12, 4.5))
+ax.plot(df.index, df["y"], color=INSPER_RED, linewidth=1.2)
+ax.axvline(pd.Timestamp("2020-03-01"), color=INSPER_GRAY, ls="--", lw=1)
+ax.annotate("COVID: 1.847 un.\n(fábricas paradas)", xy=(pd.Timestamp("2020-03-01"), 2000),
+            xytext=(pd.Timestamp("2021-06-01"), 90000),
+            arrowprops=dict(arrowstyle="->", color=INSPER_GRAY), fontsize=10)
+ax.set_title("Produção de veículos no Brasil — SGS 1373", fontweight="bold")
+ax.set_ylabel("Unidades/mês")
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-note}
+## Observe antes de modelar
+Sazonalidade anual clara, recessão 2015–16, **o buraco da COVID** (mar–mai/2020) e recuperação. Qualquer modelo bom precisa lidar com esse outlier extremo — guardem isso, vai voltar.
+:::
+
+## 1.2 Feature engineering — o básico (cobre 80% dos casos)
+
+::: {.formula-highlight}
+[Lag features]{.formula-label}
+$$X_t = \big[\, y_{t-1},\ y_{t-2},\ \ldots,\ y_{t-p},\ y_{t-12},\ y_{t-24} \,\big]$$
+:::
+
+Lags sazonais ($y_{t-12}$ mensal, $y_{t-7}$ diário) são quase sempre úteis.
+
+::: {.formula-highlight}
+[Janelas móveis (rolling)]{.formula-label}
+$$\bar{y}_t^{(k)} = \frac{1}{k}\sum_{i=1}^{k} y_{t-i}, \qquad \sigma_t^{(k)} = \sqrt{\frac{1}{k}\sum_{i=1}^{k}\big(y_{t-i}-\bar{y}_t^{(k)}\big)^2}$$
+:::
+
+Captura *estado local*: tendência recente (média) e volatilidade local (desvio).
+
+**Calendário cíclico**: $\sin(2\pi m/12),\ \cos(2\pi m/12)$ — preserva a continuidade entre dezembro e janeiro (sem ele, mês 12 e mês 1 ficam "longe").
+
+```{python}
+#| label: features-helper
+def construir_features(s: pd.Series) -> pd.DataFrame:
+    """Lags + rolling + calendário + dummy COVID. Tudo causal (só usa o passado)."""
+    X = pd.DataFrame(index=s.index)
+
+    # Lags curtos + sazonais
+    for lag in [1, 2, 3, 6, 12, 24]:
+        X[f"lag_{lag}"] = s.shift(lag)
+
+    # Rolling SEMPRE com shift(1): a janela de jun não pode incluir jun
+    for win in [3, 6, 12]:
+        X[f"roll_mean_{win}"] = s.shift(1).rolling(win).mean()
+        X[f"roll_std_{win}"]  = s.shift(1).rolling(win).std()
+
+    # Calendário cíclico
+    mes = s.index.month
+    X["mes_sin"] = np.sin(2 * np.pi * mes / 12)
+    X["mes_cos"] = np.cos(2 * np.pi * mes / 12)
+
+    # Dummy de intervenção: choque da COVID (fábricas paradas)
+    X["covid"] = ((s.index >= "2020-03-01") & (s.index <= "2020-06-01")).astype(int)
+
+    return X
+
+X_full = construir_features(df["y"])
+X_full.head(13)
+```
+
+::: {.callout-note}
+## Por que o `shift(1)` antes de cada rolling?
+Sem ele, a média móvel de junho incluiria o próprio junho — informação indisponível em produção. É exatamente o *leakage* silencioso da seção anterior. **A dummy `covid`** é uma feature de intervenção: ela "avisa" o modelo que aqueles meses foram anômalos, evitando que o choque contamine a previsão futura.
+:::
+
+## 1.3 Feature engineering avançado — FFT e o periodograma
+
+Quando o calendário cíclico básico não basta (ciclos não óbvios, múltiplas sazonalidades), a **Transformada de Fourier** decompõe a série em frequências. O **periodograma** mostra *quais ciclos dominam* — e essas frequências viram features.
+
+```{python}
+#| label: fft
+from scipy.fft import rfft, rfftfreq
+
+# Tiramos tendência (a FFT enxerga melhor o ciclo sem o "drift")
+y = df["y"].values.astype(float)
+y_detrend = y - np.polyval(np.polyfit(np.arange(len(y)), y, 1), np.arange(len(y)))
+
+amp = np.abs(rfft(y_detrend - y_detrend.mean()))
+freq = rfftfreq(len(y_detrend), d=1)          # ciclos por mês
+periodo = np.divide(1, freq, where=freq > 0)  # meses por ciclo
+
+mask = (periodo >= 2) & (periodo <= 48)
+fig, ax = plt.subplots(figsize=(11, 4))
+ax.plot(periodo[mask], amp[mask], color=INSPER_RED)
+top = periodo[mask][np.argmax(amp[mask])]
+ax.axvline(top, color=INSPER_TURQUESA, ls="--",
+           label=f"Pico em ~{top:.1f} meses")
+ax.set_xlabel("Período (meses por ciclo)")
+ax.set_ylabel("Amplitude")
+ax.set_title("Periodograma — produção de veículos", fontweight="bold")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+print(f"Ciclo dominante: ~{top:.1f} meses (esperado: 12 — sazonalidade anual)")
+```
+
+::: {.callout-tip}
+## O que a FFT está dizendo
+O pico em **~12 meses** confirma a sazonalidade anual; picos secundários em ~6 e ~3 meses são **harmônicos** (a forma do ciclo não é uma senoide pura). Na prática você usa isso para escolher *quantos termos de Fourier* incluir como feature — uma alternativa flexível ao `sin/cos` simples, especialmente útil em séries diárias com sazonalidade semanal **e** anual ao mesmo tempo.
+:::
+
+### Visualizando termos de Fourier (interativo)
+
+Quantos pares $\sin/\cos$ você precisa para reconstruir um padrão sazonal? Mexa nos controles:
+
+```{ojs}
+//| echo: false
+viewof n_harm = Inputs.range([1, 8], {value: 1, step: 1, label: "Nº de harmônicos de Fourier:"})
+```
+
+```{ojs}
+//| echo: false
+{
+  const N = 240, P = 12;
+  // "verdade": ciclo sazonal não-senoidal (queda forte em dez)
+  const truth = d3.range(N).map(t => {
+    const m = t % P;
+    return 1.0*Math.sin(2*Math.PI*m/P) + 0.5*Math.cos(4*Math.PI*m/P)
+         - 0.6*(m===11?1:0) + 0.25*Math.sin(6*Math.PI*m/P);
+  });
+  // reconstrução com K harmônicos via mínimos quadrados simples (projeção)
+  const K = n_harm;
+  const basis = [];
+  for (let k=1;k<=K;k++){
+    basis.push(d3.range(N).map(t=>Math.sin(2*Math.PI*k*(t%P)/P)));
+    basis.push(d3.range(N).map(t=>Math.cos(2*Math.PI*k*(t%P)/P)));
+  }
+  const coef = basis.map(b => d3.sum(b.map((v,i)=>v*truth[i])) / d3.sum(b.map(v=>v*v)));
+  const recon = d3.range(N).map(i => d3.sum(basis.map((b,j)=>coef[j]*b[i])));
+  const data = d3.range(36).flatMap(i => [
+    {t:i, v:truth[i], serie:"Padrão real"},
+    {t:i, v:recon[i], serie:`Fourier (K=${K})`}
+  ]);
+  return Plot.plot({
+    width: 760, height: 280, x:{label:"Mês"}, y:{label:"Efeito sazonal"},
+    color:{domain:["Padrão real",`Fourier (K=${K})`], range:[INSPER_GRAY, INSPER_RED], legend:true},
+    marks:[ Plot.line(data,{x:"t",y:"v",stroke:"serie",strokeWidth:2}),
+            Plot.ruleY([0],{stroke:"#ccc"}) ]
+  });
+}
+INSPER_RED = "#E50505"
+INSPER_GRAY = "#5B5B5B"
+d3 = require("d3@7")
+```
+
+::: {.callout-note}
+## Lendo o widget
+Com **K=1** a reconstrução é uma senoide pura — não captura a queda de dezembro. Subindo K, os harmônicos "esculpem" o formato real. É o mesmo princípio do periodograma acima: mais harmônicos = mais flexibilidade, ao custo de mais parâmetros (risco de overfitting). O Prophet usa exatamente isso para sazonalidade.
+:::
+
+### Outras técnicas avançadas (quando o básico não basta)
+
+| Técnica | Quando usar | Pacote |
+|---|---|---|
+| **tsfresh** | Gerar 700+ features e selecionar por teste estatístico | `tsfresh` |
+| **Catch-22** | 22 features canônicas validadas em larga escala | `pycatch22` |
+| **Wavelets** | Ciclos que mudam de frequência no tempo | `pywavelets` |
+| **Target encoding sazonal** | Codificar mês/dia pela média histórica de $y$ | manual |
+| **Variáveis exógenas** | Regressores externos (preço do aço, câmbio, juros) | qualquer pipeline |
+
+::: {.callout-tip}
+## Comece pelo básico
+Em competições reais (M5, M6), times no top-10 usaram quase só lags + rolling + calendário com LightGBM. Sofisticação extra costuma ser marginal — mas saber que existe te tira de apuros em séries difíceis.
+:::
+
+## 1.4 Rodando os modelos — sklearn na unha
+
+Para enxergar o pipeline inteiro, primeiro à mão: `GradientBoostingRegressor` (sem dependência extra; em produção troque por `lightgbm`/`xgboost`). Validação cruzada **expanding window**, 4 janelas de 12 meses.
+
+```{python}
+#| label: cv-boost
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-import warnings
-warnings.filterwarnings('ignore')
+def cv_boost(s, n_windows=4, h=12):
+    X = construir_features(s).dropna()
+    y = s.loc[X.index]
+    n = len(X)
+    test_starts = [n - (n_windows - i) * h for i in range(n_windows)]
+    rows = []
+    for i, start in enumerate(test_starts):
+        X_tr, y_tr = X.iloc[:start], y.iloc[:start]
+        X_te, y_te = X.iloc[start:start+h], y.iloc[start:start+h]
+        m = GradientBoostingRegressor(
+            n_estimators=300, max_depth=3, learning_rate=0.05, random_state=42
+        ).fit(X_tr, y_tr)
+        rows.append(pd.DataFrame({
+            "ds": X_te.index, "y": y_te.values,
+            "boost": m.predict(X_te), "window": i,
+        }))
+    return pd.concat(rows, ignore_index=True)
 
-INSPER_RED = '#E50505'
-INSPER_TURQUESA = '#3ACC9F'
-INSPER_AMARELO = '#FFCC00'
-INSPER_GRAY = '#5B5B5B'
-```
-
-## Caso Prático: Transferências do Tesouro Nacional
-
-Vamos prever as transferências federais a estados e municípios — um dado relevante para planejamento fiscal.
-
-```{python}
-# Baixar dados do BCB (série 7478 - Transferências da União)
-url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.7478/dados?formato=csv"
-df = pd.read_csv(url, sep=";", decimal=",")
-df['data'] = pd.to_datetime(df['data'], format='%d/%m/%Y')
-df = df.set_index('data').sort_index()
-df.columns = ['valor']
-df = df.loc['2005':]
-
-# Formato para statsforecast
-sf_df = df.reset_index()
-sf_df.columns = ['ds', 'y']
-sf_df['unique_id'] = 'transferencias'
-sf_df = sf_df[['unique_id', 'ds', 'y']]
-
-print(f"Série: {len(sf_df)} observações, de {sf_df.ds.min().date()} a {sf_df.ds.max().date()}")
-```
-
-## Etapa 1: Análise Exploratória
-
-```{python}
-fig = px.line(df, y='valor',
-              title='Transferências Federais (R$ milhões)',
-              template='plotly_white')
-fig.update_traces(line_color=INSPER_RED)
-fig.update_layout(font_family='Inter', hovermode='x unified')
-fig.show()
+cv_b = cv_boost(df["y"])
+cv_b.head(3)
 ```
 
 ```{python}
-# Diagnóstico visual completo
-fig, axes = plt.subplots(4, 1, figsize=(12, 14))
+#| label: importancia
+X_fit = construir_features(df["y"]).dropna()
+y_fit = df["y"].loc[X_fit.index]
+modelo = GradientBoostingRegressor(
+    n_estimators=300, max_depth=3, learning_rate=0.05, random_state=42
+).fit(X_fit, y_fit)
 
-# Série original
-axes[0].plot(df.index, df['valor'], color=INSPER_RED, linewidth=0.8)
-axes[0].set_title('Série Original', fontweight='bold')
-
-# Decomposição STL
-serie_mensal = df['valor'].asfreq('MS').interpolate()
-stl = STL(serie_mensal, period=12, robust=True)
-res = stl.fit()
-axes[1].plot(res.trend, color=INSPER_TURQUESA, label='Tendência')
-axes[1].legend()
-axes[1].set_title('Tendência (STL)', fontweight='bold')
-
-# ACF
-plot_acf(df['valor'].dropna(), ax=axes[2], lags=36, zero=False)
-axes[2].set_title('ACF')
-
-# PACF
-plot_pacf(df['valor'].dropna(), ax=axes[3], lags=36, zero=False)
-axes[3].set_title('PACF')
-
+imp = (pd.Series(modelo.feature_importances_, index=X_fit.columns)
+       .sort_values().tail(10))
+fig, ax = plt.subplots(figsize=(9, 4))
+imp.plot.barh(ax=ax, color=INSPER_TURQUESA)
+ax.set_title("Top features (GradientBoosting)", fontweight="bold")
 plt.tight_layout()
 plt.show()
 ```
 
-## Etapa 2: Testes e Diferenciação
+::: {.callout-note}
+## Leitura
+O `lag_12` (mesmo mês do ano anterior) e a média móvel de 12 meses costumam dominar — exatamente o que a intuição de séries sazonais previa. Boosting **não extrapola tendência**: se a série sobe, ele "trava" no máximo treinado. Mitigação: treinar na **diferença** ou nos **resíduos** de um modelo de tendência (vamos fazer isso na Parte 2 com o ARIMA-Boost).
+:::
 
-```{python}
-from statsforecast.arima import ndiffs, nsdiffs
+## 1.5 Rodando os modelos — frameworks modernos
 
-# Número de diferenciações necessárias
-d = ndiffs(df['valor'].values)
-D = nsdiffs(df['valor'].values, period=12)
+Na vida real você não escreve a CV à mão. Dois frameworks dominam o ecossistema Python:
 
-print(f"Diferenciações regulares necessárias (d): {d}")
-print(f"Diferenciações sazonais necessárias (D): {D}")
-```
+::: {.panel-tabset}
 
-```{python}
-# Aplicar diferenciações e visualizar
-serie = df['valor'].copy()
+#### MLForecast (Nixtla)
 
-if D > 0:
-    serie = serie.diff(12).dropna()
-if d > 0:
-    serie = serie.diff().dropna()
+API quase idêntica ao `statsforecast` que vocês já usam. Lags, rolling, exógenos e qualquer modelo *scikit-learn-like*.
 
-fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+```python
+# pip install mlforecast lightgbm
+from mlforecast import MLForecast
+from mlforecast.lag_transforms import RollingMean
+from lightgbm import LGBMRegressor
 
-axes[0].plot(serie, color=INSPER_RED, linewidth=0.8)
-axes[0].set_title(f'Série Diferenciada (d={d}, D={D})', fontweight='bold')
-axes[0].axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+sf_df = (df.reset_index()
+           .rename(columns={"data": "ds"})
+           .assign(unique_id="veiculos")[["unique_id", "ds", "y"]])
 
-plot_acf(serie.dropna(), ax=axes[1], lags=36, zero=False)
-axes[1].set_title('ACF — Série Diferenciada')
-
-plot_pacf(serie.dropna(), ax=axes[2], lags=36, zero=False)
-axes[2].set_title('PACF — Série Diferenciada')
-
-plt.tight_layout()
-plt.show()
-```
-
-## Etapa 3: Modelagem com statsforecast
-
-```{python}
-# Modelos candidatos
-modelos = [
-    AutoARIMA(season_length=12, alias='auto_arima'),
-    AutoARIMA(season_length=12, stepwise=False, alias='auto_arima_full'),
-    SeasonalNaive(season_length=12, alias='snaive'),
-    Naive(alias='naive'),
-]
-
-sf = StatsForecast(models=modelos, freq='MS', n_jobs=-1)
-sf.fit(df=sf_df)
-
-# Resumo dos modelos ajustados
-for i, model in enumerate(sf.fitted_):
-    print(f"Modelo {i}: {model}")
-```
-
-## Etapa 4: Cross-Validation Temporal
-
-```{python}
-# Cross-validation com janela expandida
-# Prever 12 meses à frente, testando em 5 janelas
-cv_results = sf.cross_validation(
-    df=sf_df,
-    h=12,           # horizonte de previsão
-    step_size=12,   # mover janela 12 meses por vez
-    n_windows=5     # 5 janelas de teste
+mlf = MLForecast(
+    models={"lgbm": LGBMRegressor(n_estimators=300, learning_rate=0.05)},
+    freq="MS",
+    lags=[1, 2, 3, 12, 24],
+    lag_transforms={1: [RollingMean(3), RollingMean(12)]},
+    date_features=["month", "quarter"],
 )
+cv_mlf = mlf.cross_validation(df=sf_df, h=12, n_windows=4)
+```
 
-cv_results.head(20)
+#### DARTS
+
+API "scikit-learn das séries temporais". SARIMA, Prophet, N-BEATS, NHITS, TFT e até **Chronos** (foundation model) na mesma interface.
+
+```python
+# pip install u8darts[all]
+from darts import TimeSeries
+from darts.models import LightGBMModel
+
+serie = TimeSeries.from_dataframe(
+    df.reset_index(), "data", "y", freq="MS"
+)
+modelo = LightGBMModel(lags=[-1, -2, -3, -12, -24], output_chunk_length=12)
+modelo.fit(serie[:-24])
+prev = modelo.predict(n=24)
+
+# backtest = cross-validation
+hist = modelo.historical_forecasts(
+    serie, start=0.7, forecast_horizon=12, retrain=True
+)
+```
+
+:::
+
+::: {.callout-note}
+## Qual escolher?
+- **MLForecast** se você já usa `statsforecast` — encaixa perfeitamente, é o mais rápido para muitas séries.
+- **DARTS** se quer um catálogo amplo (clássicos → deep learning → foundation models) com a **mesma** API didática.
+
+Para a entrega intermediária, qualquer uma — ou `scikit-learn` puro, como acima.
+:::
+
+# Parte 2 — Modelos com a ordem na arquitetura (35 min)
+
+Na Parte 1 o modelo não "sabia" que os dados eram uma série — nós **inserimos** a ordem via features. Agora vamos a modelos onde a dependência temporal está **embutida na arquitetura**.
+
+```{mermaid}
+flowchart TD
+    A["Modelos que respeitam a ordem"] --> B["Estatísticos clássicos"]
+    A --> C["Híbridos"]
+    A --> D["Redes neurais"]
+    A --> E["Foundation models"]
+    B --> B1["ARIMA / SARIMA"]
+    B --> B2["ETS (suavização exponencial)"]
+    C --> C1["ARIMA-Boost / STL-Boost"]
+    D --> D1["MLP · N-BEATS · NHITS"]
+    D --> D2["LSTM / GRU · TCN"]
+    D --> D3["Transformers (TFT, PatchTST)"]
+    E --> E1["Chronos · TimesFM · Moirai · TimeGPT"]
+    style A fill:#E50505,color:#fff
+    style C1 fill:#FFCC00,color:#000
+    style E1 fill:#3ACC9F,color:#fff
+```
+
+## 2.1 ARIMA — o ponto de partida (recap arquitetural)
+
+ARIMA modela a **própria estrutura de autocorrelação**: cada valor é função linear dos valores e erros passados.
+
+::: {.formula-highlight}
+[SARIMA $(p,d,q)(P,D,Q)_s$]{.formula-label}
+$$\phi_p(B)\,\Phi_P(B^s)\,(1-B)^d (1-B^s)^D\, y_t = \theta_q(B)\,\Theta_Q(B^s)\,\varepsilon_t$$
+:::
+
+```{mermaid}
+flowchart LR
+    A["Identificação<br/>ACF/PACF, ADF/KPSS"] --> B["Estimação<br/>máx. verossimilhança"]
+    B --> C["Diagnóstico<br/>resíduos ~ ruído branco?"]
+    C -->|"falhou"| A
+    C -->|"ok"| D["Previsão + IC"]
+    style A fill:#E50505,color:#fff
+    style D fill:#3ACC9F,color:#fff
 ```
 
 ```{python}
-# Calcular métricas por modelo
-from functools import reduce
+#| label: modelo-arima
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
 
-def calcular_metricas(cv_df, model_col):
-    """Calcula MAE, RMSE e MAPE para um modelo"""
-    mask = cv_df[model_col].notna()
-    y_true = cv_df.loc[mask, 'y']
-    y_pred = cv_df.loc[mask, model_col]
+sf_df = (df.reset_index()
+           .rename(columns={"data": "ds"})
+           .assign(unique_id="veiculos")[["unique_id", "ds", "y"]])
 
-    return {
-        'MAE': mean_absolute_error(y_true, y_pred),
-        'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
-        'MAPE': np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-    }
-
-model_cols = ['auto_arima', 'auto_arima_full', 'snaive', 'naive']
-metricas = {col: calcular_metricas(cv_results, col) for col in model_cols}
-metricas_df = pd.DataFrame(metricas).T
-metricas_df.sort_values('RMSE')
+sf = StatsForecast(
+    models=[
+        AutoARIMA(season_length=12, alias="arima"),
+        AutoETS(season_length=12, alias="ets"),
+        SeasonalNaive(season_length=12, alias="snaive"),
+    ],
+    freq="MS", n_jobs=1,
+)
+cv_sf = sf.cross_validation(df=sf_df, h=12, step_size=12, n_windows=4)
+cv_sf.head(3)
 ```
 
-## Etapa 5: Diagnóstico do Melhor Modelo
+## 2.2 ETS — suavização exponencial
+
+Enquanto ARIMA modela autocorrelação, **ETS (Error-Trend-Seasonal)** modela a série como nível + tendência + sazonalidade que **se atualizam de forma ponderada** (observações recentes pesam mais — daí "exponencial").
+
+::: {.conceito-card}
+#### Holt-Winters (intuição)
+$$\ell_t = \alpha\, y_t + (1-\alpha)(\ell_{t-1}+b_{t-1}) \quad\text{(nível)}$$
+$$b_t = \beta(\ell_t-\ell_{t-1}) + (1-\beta) b_{t-1} \quad\text{(tendência)}$$
+$$s_t = \gamma(y_t-\ell_t) + (1-\gamma) s_{t-m} \quad\text{(sazonalidade)}$$
+O `AutoETS` testa as combinações (aditivo/multiplicativo, com/sem amortecimento) e escolhe por AICc — análogo ao AutoARIMA. Já está rodando junto no bloco acima.
+:::
+
+::: {.callout-tip}
+## ARIMA vs. ETS — regra prática
+Não são rivais; são lentes diferentes. **ETS** brilha quando há tendência/sazonalidade claras e poucos dados. **ARIMA** brilha quando há autocorrelação rica nos resíduos. Em competições M, a **combinação simples (média) dos dois** costuma bater cada um isolado — combinar modelos é um almoço quase grátis.
+:::
+
+## 2.3 ARIMA-Boost — o híbrido
+
+Divide o trabalho: a parte **fácil** (linear, sazonal) vai para o SARIMA; a parte **difícil** (não-linearidades, efeitos de exógenas) vai para o boosting nos resíduos.
+
+::: {.formula-highlight}
+[Estratégia ARIMA-Boost]{.formula-label}
+$$y_t = \underbrace{\hat{y}_t^{\text{ARIMA}}}_{\text{linear + sazonal}} + \underbrace{f_{\text{boost}}(X_t)}_{\text{resíduos não-lineares}} + \varepsilon_t$$
+:::
+
+```{mermaid}
+flowchart LR
+    A["y_t"] --> B["SARIMA"]
+    B --> C["ŷ ARIMA<br/>(tendência + sazonal)"]
+    A --> D["resíduo = y − ŷ"]
+    D --> E["Boosting<br/>nos resíduos"]
+    C --> F["+"]
+    E --> F
+    F --> G["Previsão híbrida"]
+    style B fill:#E50505,color:#fff
+    style E fill:#FFCC00,color:#000
+    style G fill:#3ACC9F,color:#fff
+```
 
 ```{python}
-# Reajustar o melhor modelo com statsmodels para diagnóstico detalhado
+#| label: modelo-hibrido
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-# Ajustar SARIMA (use a ordem encontrada pelo AutoARIMA)
-# Exemplo: SARIMA(1,1,1)(0,1,1)[12]
-modelo = SARIMAX(df['valor'], order=(1,1,1), seasonal_order=(0,1,1,12))
-resultado = modelo.fit(disp=False)
-print(resultado.summary())
+def cv_arima_boost(s, n_windows=4, h=12, order=(1,1,1), seas=(0,1,1,12)):
+    X_all = construir_features(s)
+    n = len(s)
+    test_starts = [n - (n_windows - i) * h for i in range(n_windows)]
+    rows = []
+    for i, start in enumerate(test_starts):
+        s_tr = s.iloc[:start]
+        sarima = SARIMAX(s_tr, order=order, seasonal_order=seas).fit(disp=False)
+        prev_arima = sarima.forecast(steps=h)
+
+        resid = (s_tr - sarima.fittedvalues).rename("r")
+        X_tr = X_all.loc[resid.index].dropna()
+        r_tr = resid.loc[X_tr.index]
+
+        boost = GradientBoostingRegressor(
+            n_estimators=200, max_depth=3, learning_rate=0.05, random_state=42
+        ).fit(X_tr, r_tr)
+
+        X_te = X_all.iloc[start:start+h]
+        rows.append(pd.DataFrame({
+            "ds": X_te.index,
+            "y": s.iloc[start:start+h].values,
+            "arima_boost": prev_arima.values + boost.predict(X_te),
+            "window": i,
+        }))
+    return pd.concat(rows, ignore_index=True)
+
+cv_h = cv_arima_boost(df["y"])
+cv_h.head(3)
+```
+
+## 2.4 Comparando tudo com validação honesta
+
+```{python}
+#| label: comparar
+def mase(y_true, y_pred, y_train, m=12):
+    # erro do naive sazonal no treino: |y_t - y_{t-m}|
+    naive = np.mean(np.abs(y_train[m:] - y_train[:-m]))
+    return mean_absolute_error(y_true, y_pred) / naive
+
+def metricas(y_true, y_pred, y_train):
+    return {
+        "MAE":  mean_absolute_error(y_true, y_pred),
+        "RMSE": np.sqrt(mean_squared_error(y_true, y_pred)),
+        "MASE": mase(y_true, y_pred, y_train),
+    }
+
+cv_sf2 = cv_sf.reset_index()
+eval_df = (
+    cv_sf2[["ds", "y", "arima", "ets", "snaive"]]
+    .merge(cv_b[["ds", "boost"]], on="ds")
+    .merge(cv_h[["ds", "arima_boost"]], on="ds")
+)
+
+y_train = df["y"].iloc[:-48].values
+resumo = pd.DataFrame({
+    nome: metricas(eval_df["y"], eval_df[nome], y_train)
+    for nome in ["snaive", "ets", "arima", "boost", "arima_boost"]
+}).T.sort_values("MASE")
+resumo.round(1)
 ```
 
 ```{python}
-# Diagnóstico residual
-residuos = resultado.resid
-
-fig, axes = plt.subplots(2, 2, figsize=(14, 8))
-
-# Resíduos ao longo do tempo
-axes[0,0].plot(residuos, color=INSPER_GRAY, linewidth=0.5)
-axes[0,0].axhline(y=0, color=INSPER_RED, linewidth=1)
-axes[0,0].set_title('Resíduos', fontweight='bold')
-
-# Histograma
-axes[0,1].hist(residuos.dropna(), bins=40, color=INSPER_RED, alpha=0.7, density=True)
-axes[0,1].set_title('Distribuição dos Resíduos', fontweight='bold')
-
-# ACF dos resíduos
-plot_acf(residuos.dropna(), ax=axes[1,0], lags=36, zero=False)
-axes[1,0].set_title('ACF — Resíduos')
-
-# QQ-Plot
-from scipy import stats
-stats.probplot(residuos.dropna(), plot=axes[1,1])
-axes[1,1].set_title('QQ-Plot', fontweight='bold')
-
+#| label: plot-cv
+fig, ax = plt.subplots(figsize=(12, 5))
+ax.plot(df.index[-60:], df["y"].iloc[-60:], color=INSPER_GRAY,
+        label="Observado", lw=1)
+for nome, cor in [("arima", INSPER_RED), ("boost", INSPER_TURQUESA),
+                  ("arima_boost", INSPER_AMARELO)]:
+    ax.plot(eval_df["ds"], eval_df[nome], color=cor, label=nome, lw=1.6, alpha=0.85)
+ax.set_title("Cross-validation em 4 janelas — produção de veículos",
+             fontweight="bold")
+ax.legend(loc="lower left")
+ax.grid(alpha=0.3)
 plt.tight_layout()
 plt.show()
-
-# Teste de Ljung-Box
-lb = acorr_ljungbox(residuos.dropna(), lags=24, return_df=True)
-print("\nTeste de Ljung-Box (lags selecionados):")
-print(lb.iloc[[5, 11, 17, 23]])
 ```
 
-## Etapa 6: Previsão Final
+::: {.callout-tip}
+## Lendo a tabela com olhar crítico
 
-```{python}
-# Forecast 12 meses à frente
-forecast = sf.forecast(df=sf_df, h=12, level=[80, 95])
+1. **Comparem sempre contra o `snaive`.** O MASE divide pelo erro do naive sazonal: MASE < 1 = ganhei do baseline; > 1 = perdi. Modelo sofisticado que não bate o naive não vale o custo operacional.
+2. **O choque da COVID distorce.** As janelas que pegam 2020 punem qualquer modelo. A dummy `covid` ajuda os modelos de ML; o ARIMA puro sofre mais (precisaria de variável de intervenção).
+3. **"Mais sofisticado" ≠ "melhor".** Se o ARIMA-Boost não vence o ARIMA, é sinal de que o ARIMA já capturou o sinal e o boost só amplificou ruído. **Validem sempre.**
+:::
 
-fig = go.Figure()
+## 2.5 Redes neurais para séries
 
-# Dados históricos
-fig.add_trace(go.Scatter(x=sf_df['ds'], y=sf_df['y'],
-                          mode='lines', name='Observado',
-                          line=dict(color=INSPER_GRAY)))
+Quando há **muitos dados**, múltiplas séries relacionadas ou padrões não-lineares ricos, redes neurais entram em cena.
 
-# Previsão
-fig.add_trace(go.Scatter(x=forecast['ds'], y=forecast['auto_arima'],
-                          mode='lines+markers', name='Previsão ARIMA',
-                          line=dict(color=INSPER_RED, width=2)))
+| Modelo | Ideia central | Quando usar |
+|---|---|---|
+| **MLP** | Camadas densas sobre uma janela de lags | Baseline neural simples |
+| **N-BEATS** | Blocos que decompõem em tendência + sazonalidade (interpretável) | Forecasting univariado puro |
+| **NHITS** | N-BEATS hierárquico multi-resolução | Horizontes longos; bateu Transformers em 2023 |
+| **LSTM / GRU** | Memória de longo prazo via portas | Séries longas, dependências profundas |
+| **TCN** | Convoluções dilatadas | Treina mais rápido que LSTM |
+| **DeepAR** | Probabilístico, intervalos nativos | Muitas séries relacionadas |
+| **TFT** | Transformer multi-horizonte com atenção interpretável | Multi-variável com covariáveis ricas |
 
-fig.update_layout(
-    title='Previsão 12 Meses — Transferências Federais',
-    template='plotly_white', font_family='Inter',
-    hovermode='x unified'
-)
-fig.show()
+```{mermaid}
+flowchart LR
+    subgraph NBEATS["N-BEATS / NHITS"]
+        I1["Janela de input"] --> S1["Stack tendência"]
+        I1 --> S2["Stack sazonalidade"]
+        S1 --> O1["forecast + backcast"]
+        S2 --> O1
+    end
+    subgraph TR["Transformer (self-attention)"]
+        I2["Sequência"] --> AT["Cada ponto 'olha'<br/>todos os outros"]
+        AT --> O2["Pesos de atenção<br/>(longo prazo)"]
+    end
+    style S1 fill:#E50505,color:#fff
+    style AT fill:#FFCC00,color:#000
 ```
 
-## Dinâmica: Code Review em Pares
-
-::: {.callout-important}
-## Instruções
-
-1. **Troque** seu notebook com um colega
-2. Analise as **decisões** do colega:
-   - A diferenciação faz sentido?
-   - O modelo escolhido é justificado?
-   - O diagnóstico foi feito corretamente?
-3. Escreva **3 pontos positivos** e **2 sugestões de melhoria**
-4. Apresente ao colega em 5 minutos
+::: {.formula-highlight}
+[Self-attention (intuição)]{.formula-label}
+$$\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V$$
 :::
 
-## Exercício para Entrega Intermediária
+```python
+# Em DARTS, trocar de modelo é trocar uma linha:
+# pip install u8darts[all]
+from darts.models import NBEATSModel, NHiTSModel, TFTModel
+
+modelo = NHiTSModel(input_chunk_length=24, output_chunk_length=12, n_epochs=50)
+modelo.fit(serie[:-12])
+prev = modelo.predict(n=12)
+```
+
+::: {.callout-warning}
+## O paper que sacudiu a área
+[Zeng et al. (2023) — *Are Transformers Effective for Time Series Forecasting?*](https://arxiv.org/abs/2205.13504) (2.500+ citações) mostrou que um **modelo linear simples (DLinear)** supera vários Transformers em benchmarks de longo horizonte. Mensagem: **complexidade não é proxy de qualidade**. Suba a escada: naive → ETS/ARIMA → boosting → neural → foundation, parando assim que o ganho não pagar o custo.
+:::
+
+# Benchmarks e competições — o panorama
+
+Antes de "qual modelo é o melhor?", a resposta honesta é: **depende da série, e a literatura mede isso com rigor**. Vale conhecer as referências que o pessoal cita em entrevista e em comitê técnico.
+
+::: {.caso-negocio}
+#### As competições M (Makridakis) — a "Copa do Mundo" do forecasting
+
+| Competição | Ano | Lição central |
+|---|---|---|
+| **M3** | 2000 | Métodos simples (ETS) batiam complexos; combinação vence |
+| **M4** | 2018 | 100k séries; **híbrido ES-RNN** (estatístico + LSTM) venceu — fim do "ou estatístico ou ML" |
+| **M5** | 2020 | Vendas Walmart; **LightGBM com feature engineering** dominou o top-10 |
+| **M6** | 2022–23 | Financeiro (S&P 500); **dificílimo bater o mercado** — eficiência de mercado na prática |
+:::
+
+| Benchmark | O que cobre | Link |
+|---|---|---|
+| **Monash TSF Archive** | 30+ datasets padronizados, baselines reprodutíveis | [forecastingdata.org](https://forecastingdata.org/) |
+| **GIFT-Eval** (Salesforce) | Avaliação *zero-shot* de foundation models | [HF Space](https://huggingface.co/spaces/Salesforce/GIFT-Eval) |
+| **TFB** (2024) | ~20 métodos, multidomínio, protocolo unificado | [arXiv 2403.20150](https://arxiv.org/abs/2403.20150) |
+| **Kaggle forecasting** | Competições reais; *playbook* prático | Bojer & Meldgaard (2021) |
+
+::: {.callout-note}
+## Os 3 consensos da literatura de benchmarks
+1. **Combinação (ensemble) quase sempre ajuda.** Média simples de 2–3 modelos diversos é robusta e barata.
+2. **Boosting + bom feature engineering** segue como referência industrial difícil de bater (M5, TFB).
+3. **Não existe almoço grátis universal.** O melhor modelo varia por frequência, horizonte e domínio — por isso *benchmark no seu próprio dado* é inegociável.
+:::
+
+# Foundation models preditivos — a fronteira
+
+A grande virada de 2024–2025: modelos **pré-treinados em bilhões de pontos de séries heterogêneas** que fazem *zero-shot forecasting* — você passa a série e ele prevê, **sem treinar nada**. É o "GPT das séries temporais".
+
+## Como eles funcionam
+
+```{mermaid}
+flowchart LR
+    A["Pré-treino:<br/>milhões de séries<br/>(energia, varejo, clima, web...)"] --> B["Tokenização<br/>de valores numéricos"]
+    B --> C["Transformer grande<br/>(decoder-only / encoder)"]
+    C --> D["Modelo fundacional<br/>congelado"]
+    D --> E["Sua série nova"]
+    E --> F["Forecast zero-shot<br/>(sem fine-tuning)"]
+    style A fill:#E50505,color:#fff
+    style D fill:#FFCC00,color:#000
+    style F fill:#3ACC9F,color:#fff
+```
+
+O truque conceitual: tratar previsão como **modelagem de sequência** (igual a um LLM prevendo a próxima palavra). Há duas escolas de "tokenização":
+
+- **Quantização em vocabulário** (Chronos): discretiza os valores em "tokens" e usa um T5 — literalmente *a linguagem das séries*.
+- **Patches contínuos** (TimesFM, Moirai, PatchTST): fatia a série em pedaços e projeta cada pedaço num embedding, sem discretizar.
+
+| Modelo | Quem fez | Característica |
+|---|---|---|
+| **Chronos** | Amazon (2024) | Tokeniza valores + T5; baseline zero-shot fortíssimo |
+| **TimesFM** | Google (2024) | Decoder-only; treinado em ~100B pontos |
+| **Moirai** | Salesforce (2024) | "Universal" — várias frequências e covariáveis |
+| **TimeGPT** | Nixtla (2023–24) | **API comercial**; o mais fácil de usar (`nixtla` SDK) |
+| **Lag-Llama** | ServiceNow/MILA (2024) | Probabilístico, transformer estilo Llama |
+| **Time-MoE** | (2024) | Mixture-of-Experts, escala a bilhões de params |
+| **TTM** | IBM (2024) | "Tiny" — leve, roda em CPU/dispositivo |
+
+```python
+# TimeGPT (Nixtla) — o mais simples: 3 linhas, requer API key
+# pip install nixtla
+from nixtla import NixtlaClient
+client = NixtlaClient(api_key="SUA_CHAVE")
+forecast = client.forecast(df=sf_df, h=12, freq="MS")
+
+# Chronos (Amazon) — open-source, roda local
+# pip install chronos-forecasting
+import torch
+from chronos import ChronosPipeline
+pipe = ChronosPipeline.from_pretrained("amazon/chronos-t5-small")
+ctx = torch.tensor(df["y"].values)
+fc = pipe.predict(ctx, prediction_length=12)  # zero-shot, sem treinar
+```
+
+::: {.callout-note}
+## Vantagens × desvantagens
+
+**✅ Vantagens**
+
+- *Zero-shot*: baseline competitivo **sem dados de treino** e sem tuning.
+- Excelente para **prototipagem rápida** e para **muitas séries heterogêneas** (varejo multi-SKU, IoT).
+- Lidam bem com séries curtas e com quebras estruturais (viram muitas no pré-treino).
+
+**❌ Desvantagens**
+
+- **Caixa-preta**: quase nenhuma interpretabilidade — ruim quando o cliente pergunta "por quê?".
+- **Domínios atípicos**: séries financeiras de alta frequência e padrões muito específicos ainda são caso difícil — o pré-treino pode não ter "visto" nada parecido.
+- **Custo/infra**: modelos grandes pedem GPU; APIs (TimeGPT) têm custo e dependência externa.
+- **Não são mágica**: em benchmarks como GIFT-Eval/TFB, um LightGBM bem ajustado ainda ganha em muitos casos com dados próprios suficientes.
+:::
+
+::: {.callout-tip}
+## Quando vale o foundation model (regra de bolso)
+✅ Pouco histórico · baseline rápido · muitas séries heterogêneas · prototipagem.
+❌ Domínio muito específico sem similaridade com o pré-treino · interpretabilidade obrigatória · alta frequência financeira.
+**No trabalho intermediário:** vale testar o Chronos via DARTS como *zero-shot* e comparar com o seu SARIMA — ótimo argumento de pitch ("testamos a fronteira e mesmo assim o SARIMA com tratamento da quebra venceu/perdeu por X").
+:::
+
+## Tendências (2024–2026)
+
+1. **Foundation models viraram baseline real.** Chronos, TimesFM, Moirai, TimeGPT, Time-MoE, TTM — *zero-shot* já entra como linha de comparação obrigatória.
+2. **LLMs reaproveitados** ([Time-LLM](https://arxiv.org/abs/2310.01728), [TEMPO](https://arxiv.org/abs/2310.04948)) — reprogramam GPT/Llama via *prompting* numérico. Promissor mas ainda nichado.
+3. **Lineares + boosting continuam imbatíveis** em muitos casos práticos com dados próprios suficientes (M5, TFB).
+
+# Bloco final — Office hours do Trabalho Intermediário (115 min)
 
 ::: {.callout-important}
-## Entrega Intermediária: Orientações
+## Como vamos usar esse tempo
 
-Escolha uma série temporal mensal com pelo menos 5 anos de dados. Faça:
-
-1. **Análise exploratória** completa (gráficos, ACF/PACF, decomposição)
-2. **Testes** de estacionariedade e decisão sobre diferenciação
-3. **Modelagem** com pelo menos 3 modelos candidatos
-4. **Cross-validation** temporal com métricas de erro
-5. **Diagnóstico** residual do melhor modelo
-6. **Previsão** com intervalos de confiança
-7. **Interpretação** de negócios: o que a previsão significa para a tomada de decisão?
-
-**Formato**: notebook Python (.ipynb ou .qmd) com texto explicativo.
+1. **Abram o enunciado:** [Trabalho Intermediário](../trabalhos/intermediario.qmd).
+2. **Trabalhem em grupo** (mesmo remoto, abram uma sala paralela).
+3. **O monitor circula** entre os grupos tirando dúvidas pontuais.
+4. **Usem o overview de hoje:** se quiserem testar ML/híbrido/foundation como alternativa ao SARIMA, agora é a hora.
+5. **Meta:** ter pelo menos um forecast rodando e o `previsao.csv` parcial.
 :::
+
+::: {.callout-tip}
+## Sugestão de roteiro
+
+| Tempo | Foco |
+|---|---|
+| 0–20 min | Carregar dados, gráfico inicial, decidir tratamento da aquisição (jul/2019) |
+| 20–60 min | 2–3 modelos candidatos (SeasonalNaive + AutoARIMA + um ML/híbrido) |
+| 60–90 min | Validação cruzada, escolher o melhor, diagnóstico residual |
+| 90–110 min | Forecast final, gráfico, exportar `previsao.csv` |
+| 110–115 min | Revisar checklist da entrega |
+:::
+
+::: {.callout-caution collapse="true"}
+## Exercício opcional — qual família como 2ª escolha (depois de SARIMA)?
+
+Considerem: (1) **histórico**: 120 meses — foundation *zero-shot* funciona; LSTM/N-BEATS "do zero" pedem >300 obs. (2) **Quebra estrutural** (aquisição jul/2019): ARIMA precisa de dummy/descarte; boosting absorve com `apos_aquisicao`; foundation lida natural. (3) **Sazonalidade** anual forte: SARIMA, Prophet, NHITS, LGBM com lag 12 capturam. (4) **Interpretabilidade**: boosting+SHAP, ARIMA, Prophet são defensáveis; foundation é black-box.
+
+**Recomendação:** SARIMA baseline + ARIMA-Boost ou LightGBM com `apos_aquisicao` + lags 1/12/24. Para ousar: Chronos via DARTS *zero-shot* e comparar.
+:::
+
+::: {.callout-note}
+## Versão notebook (sem firulas)
+Os códigos executáveis deste lab estão num notebook limpo, pronto para rodar com a turma e servir de template: veja **[Códigos → Lab 2: ML para séries (notebook)](../complementar/lab02-ml-series-notebook.ipynb)**.
+:::
+
+# Referências
+
+## Livros e tutoriais
+
+- Hyndman, R.J. & Athanasopoulos, G. (2021). [*Forecasting: Principles and Practice*](https://otexts.com/fpp3/), 3ª ed.
+- Oudre, L. (2023). [*Apprentissage Statistique pour les Séries Temporelles*](https://www.laurentoudre.fr/ast/AST0.pdf) — base do panorama de tarefas.
+- Januschowski, T. et al. (2020). *Criteria for Classifying Forecasting Methods*. *Int. J. Forecasting*.
+
+## Competições e benchmarks
+
+- Makridakis, S., Spiliotis, E., Assimakopoulos, V. (2022). *The M5 accuracy competition: Results, findings and conclusions*. *Int. J. Forecasting*.
+- Makridakis, S. et al. (2020). *The M4 Competition: 100,000 time series and 61 forecasting methods*. *Int. J. Forecasting*.
+- Makridakis, S. et al. (2023). *The M6 forecasting competition*. (financial forecasting).
+- Bojer, C.S. & Meldgaard, J.P. (2021). *Kaggle forecasting competitions: An overlooked learning opportunity*. *Int. J. Forecasting*.
+- Qiu, X. et al. (2024). [*TFB: Towards Comprehensive and Fair Benchmarking of Time Series Forecasting Methods*](https://arxiv.org/abs/2403.20150).
+- [Monash TSF Archive](https://forecastingdata.org/) · [GIFT-Eval](https://huggingface.co/spaces/Salesforce/GIFT-Eval).
+
+## Deep learning para séries
+
+- Oreshkin, B.N. et al. (2020). [*N-BEATS*](https://arxiv.org/abs/1905.10437).
+- Challu, C. et al. (2023). [*NHITS*](https://arxiv.org/abs/2201.12886).
+- Lim, B. et al. (2021). [*Temporal Fusion Transformers*](https://arxiv.org/abs/1912.09363).
+- Zeng, A. et al. (2023). [*Are Transformers Effective for Time Series Forecasting?*](https://arxiv.org/abs/2205.13504) — leitura **obrigatória**.
+- Smyl, S. (2020). *ES-RNN: hybrid exponential smoothing + RNN* — vencedor do M4.
+
+## Foundation models e LLMs
+
+- Ansari, A.F. et al. (2024). [*Chronos: Learning the Language of Time Series*](https://arxiv.org/abs/2403.07815).
+- Das, A. et al. (2024). [*A decoder-only foundation model for time-series forecasting (TimesFM)*](https://arxiv.org/abs/2310.10688).
+- Woo, G. et al. (2024). [*Moirai*](https://arxiv.org/abs/2402.02592).
+- Garza, A. et al. (2023). [*TimeGPT-1*](https://arxiv.org/abs/2310.03589) (Nixtla).
+- Rasul, K. et al. (2024). [*Lag-Llama*](https://arxiv.org/abs/2310.08278).
+- Liang, Y. et al. (2024). [*Foundation Models for Time Series: A Tutorial and Survey*](https://arxiv.org/abs/2403.14735).
+- Jin, M. et al. (2024). [*Time-LLM*](https://arxiv.org/abs/2310.01728) · Cao, D. et al. (2024). [*TEMPO*](https://arxiv.org/abs/2310.04948).
+
+## Bibliotecas
+
+- [statsforecast](https://nixtlaverse.nixtla.io/statsforecast/) · [mlforecast](https://nixtlaverse.nixtla.io/mlforecast/) · [neuralforecast](https://nixtlaverse.nixtla.io/neuralforecast/) (Nixtla).
+- [DARTS](https://unit8co.github.io/darts/) — catálogo unificado, inclui foundation models.
+- [sktime](https://www.sktime.net/) / [aeon](https://www.aeon-toolkit.org/) — classificação e regressão temporal.
+- [tsfresh](https://tsfresh.readthedocs.io/) — feature engineering automática.
+- [Chronos](https://github.com/amazon-science/chronos-forecasting) · [TimeGPT/Nixtla](https://docs.nixtla.io/).
