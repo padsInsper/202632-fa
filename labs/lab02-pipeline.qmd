@@ -649,7 +649,96 @@ plt.show()
 3. **"Mais sofisticado" ≠ "melhor".** Se o ARIMA-Boost não vence o ARIMA, é sinal de que o ARIMA já capturou o sinal e o boost só amplificou ruído. **Validem sempre.**
 :::
 
-## 2.5 Redes neurais para séries
+## 2.5 Comparação ampliada — ML, deep learning e foundation model
+
+A tabela acima usa só os modelos que rodam leves no site. Mas a pergunta natural é: *e os pesados — LightGBM, N-BEATS, Chronos — como se saem nesta mesma série?* Rodamos **offline** (são dependências grandes: `lightgbm`, `torch`, `neuralforecast`, `chronos-forecasting`) exatamente o mesmo protocolo: SGS 1373, validação cruzada *expanding* de **4 janelas × 12 meses**, MASE contra o `SeasonalNaive`.
+
+| Modelo | MAE | RMSE | MASE |
+|---|---:|---:|---:|
+| **ETS** (AutoETS) | 16.051 | 20.873 | **0,34** |
+| **ARIMA-Boost** (híbrido) | 18.797 | 22.779 | 0,40 |
+| **Chronos** (bolt-small, *zero-shot*) | 21.819 | 26.353 | 0,47 |
+| **GradientBoosting** (sklearn) | 21.858 | 27.262 | 0,47 |
+| **AutoARIMA** | 23.680 | 27.914 | 0,51 |
+| **SeasonalNaive** (baseline) | 23.887 | 30.482 | 0,51 |
+| **LightGBM** | 25.689 | 33.201 | 0,55 |
+| **N-BEATS** (treinado do zero) | 29.710 | 40.876 | 0,64 |
+
+::: {.callout-important}
+## O que essa tabela ensina (talvez a lição mais importante do lab)
+
+1. **O modelo mais simples venceu.** Um `AutoETS` — três equações de suavização — bateu LightGBM, N-BEATS e o foundation model. Em séries univariadas, mensais, com ~168 observações, sazonalidade limpa e tendência suave, **é exatamente o esperado**: não há dados nem complexidade de sinal que justifiquem deep learning.
+2. **Chronos *zero-shot* foi competitivo sem ver um único ponto desta série** (MASE 0,47, empatado com o GradientBoosting e bem acima do `snaive`). Esse é o valor real dos foundation models: um baseline forte **de graça**, sem treino nem tuning — ótimo para prototipagem.
+3. **N-BEATS foi o pior.** Rede neural treinada do zero com ~168 pontos não tem dados para aprender — overfitta o ruído. Reforça a regra: deep learning pede **muitos** dados (ou muitas séries).
+4. **LightGBM perdeu para o GradientBoosting do sklearn** aqui — não porque é pior, mas porque com poucos dados e sem tuning de hiperparâmetros o ganho do LightGBM não aparece. Em M5 (42 mil séries) a história se inverte.
+
+Moral: **suba a escada de complexidade só enquanto o ganho pagar o custo**, e *benchmark no seu próprio dado* — nunca por reputação do modelo.
+:::
+
+::: {.callout-note collapse="true"}
+## Código de reprodução (não executa no site — dependências pesadas)
+
+Mesmo `df`, `construir_features` e `mase` das células anteriores. Para rodar localmente: `uv pip install lightgbm "torch --index-url https://download.pytorch.org/whl/cpu" chronos-forecasting neuralforecast`.
+
+```{python}
+#| eval: false
+#| code-fold: true
+from lightgbm import LGBMRegressor
+from neuralforecast import NeuralForecast
+from neuralforecast.models import NBEATS
+from chronos import BaseChronosPipeline
+import torch
+
+n, H, W = len(df), 12, 4
+starts = [n - (W - i) * H for i in range(W)]
+idx = df.index[starts[0]:]            # últimos 48 meses (4 janelas)
+
+# --- regressores tabulares (mesma CV do GradientBoosting) ---
+def cv_reg(make_model):
+    X = construir_features(df["y"]).dropna()
+    y = df["y"].loc[X.index]
+    st = [len(X) - (W - i) * H for i in range(W)]
+    return pd.concat([
+        pd.Series(make_model().fit(X.iloc[:s], y.iloc[:s])
+                  .predict(X.iloc[s:s+H]), index=X.index[s:s+H])
+        for s in st
+    ])
+
+lgbm = cv_reg(lambda: LGBMRegressor(n_estimators=300, learning_rate=0.05,
+                                    verbose=-1, random_state=42))
+
+# --- N-BEATS (neuralforecast) ---
+nf = NeuralForecast(
+    models=[NBEATS(h=H, input_size=24, max_steps=400, scaler_type="standard")],
+    freq="MS",
+)
+cv_nb = (nf.cross_validation(df=sf_df, n_windows=W, step_size=H)
+           .reset_index().set_index("ds")["NBEATS"])
+
+# --- Chronos zero-shot (foundation model) ---
+pipe = BaseChronosPipeline.from_pretrained(
+    "amazon/chronos-bolt-small", device_map="cpu", torch_dtype=torch.float32
+)
+ch = []
+for s in starts:
+    ctx = torch.tensor(df["y"].iloc[:s].values, dtype=torch.float32)
+    _, mean = pipe.predict_quantiles(ctx, prediction_length=H,
+                                     quantile_levels=[0.5])
+    ch.append(pd.Series(mean.numpy().flatten()[:H], index=df.index[s:s+H]))
+ch = pd.concat(ch)
+
+# --- tabela final alinhada por data ---
+E = pd.DataFrame({"y": df["y"].loc[idx]})
+E["lightgbm"] = lgbm.reindex(idx)
+E["nbeats"]   = cv_nb.reindex(idx)
+E["chronos"]  = ch.reindex(idx)
+# junte com eval_df (ets, arima, boost, arima_boost, snaive) e aplique `mase`
+```
+
+> **Fine-tuning do Chronos.** O número acima é **zero-shot** (modelo congelado). O Chronos também aceita *fine-tuning*: você continua o treino do modelo pré-treinado por algumas épocas **na sua própria série** (ou no seu conjunto de séries), o que costuma reduzir o erro de forma relevante em domínios que diferem do pré-treino — ao custo de GPU e de perder a vantagem do "sem treino". Há scripts oficiais no [repositório do Chronos](https://github.com/amazon-science/chronos-forecasting) (`scripts/training`). Para a entrega intermediária, o *zero-shot* já é um ótimo argumento de comparação; *fine-tuning* é um "se sobrar tempo / quiser impressionar".
+:::
+
+## 2.6 Redes neurais para séries
 
 Quando há **muitos dados**, múltiplas séries relacionadas ou padrões não-lineares ricos, redes neurais entram em cena.
 
@@ -761,21 +850,27 @@ O truque conceitual: tratar previsão como **modelagem de sequência** (igual a 
 | **Time-MoE** | (2024) | Mixture-of-Experts, escala a bilhões de params |
 | **TTM** | IBM (2024) | "Tiny" — leve, roda em CPU/dispositivo |
 
-```python
-# TimeGPT (Nixtla) — o mais simples: 3 linhas, requer API key
-# pip install nixtla
-from nixtla import NixtlaClient
-client = NixtlaClient(api_key="SUA_CHAVE")
-forecast = client.forecast(df=sf_df, h=12, freq="MS")
+O **Chronos** (Amazon) é o mais fácil de testar: open-source, roda local na CPU, sem chave de API. É exatamente este que entrou na comparação da seção 2.5.
 
-# Chronos (Amazon) — open-source, roda local
+```python
+# Chronos (Amazon) — open-source, roda local, zero-shot
 # pip install chronos-forecasting
 import torch
-from chronos import ChronosPipeline
-pipe = ChronosPipeline.from_pretrained("amazon/chronos-t5-small")
-ctx = torch.tensor(df["y"].values)
-fc = pipe.predict(ctx, prediction_length=12)  # zero-shot, sem treinar
+from chronos import BaseChronosPipeline
+
+pipe = BaseChronosPipeline.from_pretrained(
+    "amazon/chronos-bolt-small", device_map="cpu", torch_dtype=torch.float32
+)
+ctx = torch.tensor(df["y"].values, dtype=torch.float32)
+_, mean = pipe.predict_quantiles(            # zero-shot: nenhum treino
+    ctx, prediction_length=12, quantile_levels=[0.5]
+)
 ```
+
+::: {.callout-tip}
+## Zero-shot vs. fine-tuning do Chronos
+O código acima é **zero-shot**: o modelo chega congelado e prevê direto — foi assim que ele tirou MASE 0,47 na seção 2.5, *sem ver um único ponto da série*. Para apertar mais, dá para fazer **fine-tuning**: continuar o treino do modelo pré-treinado por algumas épocas na sua própria série (ou conjunto de séries). Costuma ajudar quando o seu domínio difere bastante do que o Chronos viu no pré-treino — ao custo de GPU e de abrir mão da vantagem "sem treino". Receita oficial em [`scripts/training` no repo do Chronos](https://github.com/amazon-science/chronos-forecasting). Para o trabalho intermediário, o *zero-shot* já é um ótimo ponto de comparação; *fine-tuning* fica como desafio extra.
+:::
 
 ::: {.callout-note}
 ## Vantagens × desvantagens
