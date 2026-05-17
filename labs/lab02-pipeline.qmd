@@ -361,30 +361,82 @@ Seja $T$ o último mês disponível. Reservamos os **últimos 48 meses** e os qu
 No código: `n_windows=4`, `h=12`, `step_size=12` (janelas **não se sobrepõem**). A métrica final (MAE/RMSE/MASE) é calculada sobre os **48 pontos de teste juntos** — uma média sobre 4 cenários diferentes, não a sorte de um único corte.
 :::
 
-```{mermaid}
-flowchart LR
-    subgraph J1["Janela 1"]
-        direction LR
-        T1["Treino: início → T-48"] --> P1["Prevê 12m"]
-    end
-    subgraph J2["Janela 2"]
-        direction LR
-        T2["Treino: início → T-36"] --> P2["Prevê 12m"]
-    end
-    subgraph J3["Janela 3"]
-        direction LR
-        T3["Treino: início → T-24"] --> P3["Prevê 12m"]
-    end
-    subgraph J4["Janela 4"]
-        direction LR
-        T4["Treino: início → T-12"] --> P4["Prevê 12m"]
-    end
-    J1 --> J2 --> J3 --> J4
-    style P1 fill:#E50505,color:#fff
-    style P2 fill:#E50505,color:#fff
-    style P3 fill:#E50505,color:#fff
-    style P4 fill:#E50505,color:#fff
+### Visualizando o esquema (interativo)
+
+Os controles começam **na configuração real do lab** (Expanding · 4 janelas · h=12). Mexa neles para entender as escolhas — especialmente: troque para *Sliding* e veja quanto histórico é jogado fora numa série tão curta.
+
+```{ojs}
+//| echo: false
+
+viewof cv_metodo = Inputs.radio(["Expanding", "Sliding"], {
+  value: "Expanding", label: "Método:"
+})
+
+viewof cv_njanelas = Inputs.range([3, 6], {
+  value: 4, step: 1, label: "Nº de janelas:"
+})
+
+viewof cv_h = Inputs.range([6, 18], {
+  value: 12, step: 1, label: "Horizonte h (meses):"
+})
 ```
+
+```{ojs}
+//| echo: false
+
+{
+  const T = 170;                 // ~tamanho da serie SGS 1373 (meses)
+  const W = cv_njanelas;
+  const h = cv_h;
+  const slidingTrain = 48;       // janela fixa de 4 anos no modo Sliding
+  const covid = 98;              // mar/2020 (indice a partir de jan/2012)
+
+  const data = [];
+  for (let s = 0; s < W; s++) {
+    const testStart = T - (W - s) * h;          // = test_starts do codigo
+    const testEnd   = testStart + h;
+    const trainStart = cv_metodo === "Expanding"
+      ? 0
+      : Math.max(0, testStart - slidingTrain);
+    for (let t = 0; t < T; t++) {
+      let tipo = "Não usado";
+      if (t >= trainStart && t < testStart) tipo = "Treino";
+      else if (t >= testStart && t < testEnd) tipo = "Teste (prevê 12m)";
+      data.push({ janela: `Janela ${s + 1}`, t, tipo });
+    }
+  }
+
+  return Plot.plot({
+    width: 820,
+    height: 70 + W * 38,
+    marginLeft: 80,
+    marks: [
+      Plot.cell(data.filter(d => d.tipo !== "Não usado"),
+        { x: "t", y: "janela", fill: "tipo", inset: 0.5 }),
+      Plot.ruleX([covid], { stroke: "#5B5B5B", strokeDasharray: "4,3" }),
+      Plot.text([{ t: covid }], {
+        x: "t", y: () => `Janela 1`, text: () => "COVID (mar/2020)",
+        dy: -22, fill: "#5B5B5B", fontSize: 11, textAnchor: "middle"
+      })
+    ],
+    x: { label: "Mês (t) — início = jan/2012", domain: [0, T] },
+    y: { label: null,
+         domain: Array.from({ length: W }, (_, i) => `Janela ${i + 1}`) },
+    color: { domain: ["Treino", "Teste (prevê 12m)"],
+             range: ["#3ACC9F", "#E50505"], legend: true },
+    title: `${cv_metodo} window · ${W} janelas · h = ${h} `
+         + `(teste = últimos ${W * h} meses)`
+  });
+}
+```
+
+::: {.callout-tip}
+## O que observar no widget
+- Em **Expanding** (padrão), o bloco verde de treino **cresce** a cada janela e sempre começa em jan/2012 — nenhum dado é descartado.
+- Troque para **Sliding**: o treino vira uma faixa fixa que "desliza". Numa série de só ~170 meses, isso **joga fora anos de histórico** a cada janela — por isso o lab usa *expanding*.
+- O bloco vermelho (teste) **nunca se sobrepõe** entre janelas (`step_size = h`) e sempre vem **depois** do treino — é isso que garante a validação honesta.
+- A linha tracejada marca o choque da COVID: note como ele cai em janelas de treino diferentes conforme você muda `h`.
+:::
 
 ::: {.callout-note}
 ## Por que **este** esquema (e não outro)
