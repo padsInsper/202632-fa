@@ -342,9 +342,65 @@ Com **K=1** a reconstrução é uma senoide pura — não captura a queda de dez
 Em competições reais (M5, M6), times no top-10 usaram quase só lags + rolling + calendário com LightGBM. Sofisticação extra costuma ser marginal — mas saber que existe te tira de apuros em séries difíceis.
 :::
 
-## 1.4 Rodando os modelos — sklearn na unha
+## 1.4 O esquema de validação — o mesmo o lab inteiro {#sec-cv}
 
-Para enxergar o pipeline inteiro, primeiro à mão: `GradientBoostingRegressor` (sem dependência extra; em produção troque por `lightgbm`/`xgboost`). Validação cruzada **expanding window**, 4 janelas de 12 meses.
+**Toda** comparação deste lab (Parte 1 e Parte 2, sklearn, `statsforecast` e a tabela ampliada com Chronos) usa **exatamente o mesmo protocolo**, para que os números sejam comparáveis entre si. Vamos deixá-lo explícito antes de qualquer modelo rodar.
+
+::: {.callout-important}
+## Protocolo: *expanding window*, 4 janelas, h = 12, sem embaralhar
+
+Seja $T$ o último mês disponível. Reservamos os **últimos 48 meses** e os quebramos em **4 janelas consecutivas de 12 meses**. Em cada janela, o modelo treina em **tudo que veio antes** e prevê os **12 meses seguintes** (que ele nunca viu):
+
+| Janela | Treino (*expanding* — cresce a cada janela) | Teste (12 meses à frente) |
+|---|---|---|
+| 1 | início → $T-48$ | $T-47 \ldots T-36$ |
+| 2 | início → $T-36$ | $T-35 \ldots T-24$ |
+| 3 | início → $T-24$ | $T-23 \ldots T-12$ |
+| 4 | início → $T-12$ | $T-11 \ldots T$ |
+
+No código: `n_windows=4`, `h=12`, `step_size=12` (janelas **não se sobrepõem**). A métrica final (MAE/RMSE/MASE) é calculada sobre os **48 pontos de teste juntos** — uma média sobre 4 cenários diferentes, não a sorte de um único corte.
+:::
+
+```{mermaid}
+flowchart LR
+    subgraph J1["Janela 1"]
+        direction LR
+        T1["Treino: início → T-48"] --> P1["Prevê 12m"]
+    end
+    subgraph J2["Janela 2"]
+        direction LR
+        T2["Treino: início → T-36"] --> P2["Prevê 12m"]
+    end
+    subgraph J3["Janela 3"]
+        direction LR
+        T3["Treino: início → T-24"] --> P3["Prevê 12m"]
+    end
+    subgraph J4["Janela 4"]
+        direction LR
+        T4["Treino: início → T-12"] --> P4["Prevê 12m"]
+    end
+    J1 --> J2 --> J3 --> J4
+    style P1 fill:#E50505,color:#fff
+    style P2 fill:#E50505,color:#fff
+    style P3 fill:#E50505,color:#fff
+    style P4 fill:#E50505,color:#fff
+```
+
+::: {.callout-note}
+## Por que **este** esquema (e não outro)
+
+1. **Respeita a causalidade.** O treino sempre *precede* o teste no tempo. Nada de k-fold embaralhado — isso deixaria o modelo "ver o futuro" e produziria métricas otimistas que não se sustentam em produção (o *leakage* da seção 0).
+2. **Imita a operação real.** A montadora re-treina o modelo uma vez por ano e prevê o próximo ano. Cada janela reproduz literalmente esse ciclo de re-treino + previsão de 12 meses.
+3. **`h = 12` é o horizonte de negócio.** O orçamento e o planejamento de compras são anuais — e é também o horizonte da entrega intermediária. Validamos no horizonte que realmente importa.
+4. **4 janelas = robustez.** 48 meses de teste cobrem **regimes distintos** (recuperação pós-COVID, normalização, anos recentes). Um modelo que parece ótimo num corte e péssimo em outro é exposto — exatamente o que queremos antes de confiar nele.
+5. ***Expanding* e não *sliding*.** A série é curta (~170 meses). Descartar histórico antigo (janela deslizante de tamanho fixo) desperdiçaria dados escassos. Usaríamos *sliding* se houvesse uma quebra de regime tão forte que o passado distante atrapalhasse mais do que ajudasse — não é o caso aqui (a dummy `covid` já isola o choque).
+
+A teoria completa (*expanding* × *sliding*, com simulador interativo) está na [Aula 4 — Previsão e Validação](../aulas/aula04-previsao.qmd). Aqui a decisão já está tomada e fixada.
+:::
+
+## 1.5 Rodando os modelos — sklearn na unha
+
+Para enxergar o pipeline inteiro, primeiro à mão: `GradientBoostingRegressor` (sem dependência extra; em produção troque por `lightgbm`/`xgboost`). É a implementação direta do protocolo acima.
 
 ```{python}
 #| label: cv-boost
@@ -395,7 +451,7 @@ plt.show()
 O `lag_12` (mesmo mês do ano anterior) e a média móvel de 12 meses costumam dominar — exatamente o que a intuição de séries sazonais previa. Boosting **não extrapola tendência**: se a série sobe, ele "trava" no máximo treinado. Mitigação: treinar na **diferença** ou nos **resíduos** de um modelo de tendência (vamos fazer isso na Parte 2 com o ARIMA-Boost).
 :::
 
-## 1.5 Rodando os modelos — frameworks modernos
+## 1.6 Rodando os modelos — frameworks modernos
 
 Na vida real você não escreve a CV à mão. Dois frameworks dominam o ecossistema Python:
 
@@ -595,6 +651,8 @@ cv_h.head(3)
 ```
 
 ## 2.4 Comparando tudo com validação honesta
+
+Mesmo protocolo da [seção 1.4](#sec-cv): *expanding window*, 4 janelas, `h=12`, sem embaralhar. Os modelos clássicos usam `StatsForecast.cross_validation` (que implementa esse esquema nativamente, com `step_size=12, n_windows=4`); o boosting e o híbrido replicam o mesmo corte à mão.
 
 ```{python}
 #| label: comparar
