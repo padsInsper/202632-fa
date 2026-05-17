@@ -19,6 +19,13 @@ dependencies = [
     "ipykernel>=6.0",
     "python-bcb>=0.3",
     "prophet>=1.1",
+    "mlforecast>=1.0.31",
+    "lightgbm>=4.6.0",
+    "darts>=0.44.1",
+    "u8darts[all]>=0.40.0",
+    "chronos-forecasting>=2.2.2",
+    "tsfresh>=0.20",
+    "pycatch22>=0.4",
 ]
 
 [dependency-groups]
