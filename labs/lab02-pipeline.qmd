@@ -290,30 +290,37 @@ viewof n_harm = Inputs.range([1, 8], {value: 1, step: 1, label: "Nº de harmôni
 ```{ojs}
 //| echo: false
 {
-  const N = 240, P = 12;
-  // "verdade": ciclo sazonal não-senoidal (queda forte em dez)
-  const truth = d3.range(N).map(t => {
-    const m = t % P;
-    return 1.0*Math.sin(2*Math.PI*m/P) + 0.5*Math.cos(4*Math.PI*m/P)
-         - 0.6*(m===11?1:0) + 0.25*Math.sin(6*Math.PI*m/P);
-  });
-  // reconstrução com K harmônicos via mínimos quadrados simples (projeção)
+  const P = 12;
+  // grade fina e contínua (3 períodos) -> curva suave e harmônicos sem aliasing
+  const xs = d3.range(0, 36.0001, 0.1);
+  const ph = x => x % P;
+  // "verdade": função CONTÍNUA e periódica, não-senoidal (queda suave em dez)
+  const dip = p => { const d = Math.min(Math.abs(p-11), P-Math.abs(p-11));
+                     return Math.exp(-(d*d)/(2*0.8*0.8)); };
+  const f = x => 1.0*Math.sin(2*Math.PI*ph(x)/P)
+               + 0.4*Math.sin(4*Math.PI*ph(x)/P)
+               - 0.9*dip(ph(x));
+  const truth = xs.map(f);
+
   const K = n_harm;
+  const a0 = d3.mean(truth);
   const basis = [];
   for (let k=1;k<=K;k++){
-    basis.push(d3.range(N).map(t=>Math.sin(2*Math.PI*k*(t%P)/P)));
-    basis.push(d3.range(N).map(t=>Math.cos(2*Math.PI*k*(t%P)/P)));
+    basis.push(xs.map(x=>Math.sin(2*Math.PI*k*ph(x)/P)));
+    basis.push(xs.map(x=>Math.cos(2*Math.PI*k*ph(x)/P)));
   }
-  const coef = basis.map(b => d3.sum(b.map((v,i)=>v*truth[i])) / d3.sum(b.map(v=>v*v)));
-  const recon = d3.range(N).map(i => d3.sum(basis.map((b,j)=>coef[j]*b[i])));
-  const data = d3.range(36).flatMap(i => [
-    {t:i, v:truth[i], serie:"Padrão real"},
-    {t:i, v:recon[i], serie:`Fourier (K=${K})`}
+  // projeção (bases ortogonais na grade fina -> mais K reduz o erro sempre)
+  const coef = basis.map(b => d3.sum(b.map((v,i)=>v*(truth[i]-a0))) / d3.sum(b.map(v=>v*v)));
+  const recon = xs.map((x,i) => a0 + d3.sum(basis.map((b,j)=>coef[j]*b[i])));
+
+  const data = xs.flatMap((x,i) => [
+    {t:x, v:truth[i], serie:"Padrão real"},
+    {t:x, v:recon[i], serie:`Fourier (K=${K})`}
   ]);
   return Plot.plot({
     width: 760, height: 280, x:{label:"Mês"}, y:{label:"Efeito sazonal"},
     color:{domain:["Padrão real",`Fourier (K=${K})`], range:[INSPER_GRAY, INSPER_RED], legend:true},
-    marks:[ Plot.line(data,{x:"t",y:"v",stroke:"serie",strokeWidth:2}),
+    marks:[ Plot.line(data,{x:"t",y:"v",stroke:"serie",strokeWidth:2,curve:"natural"}),
             Plot.ruleY([0],{stroke:"#ccc"}) ]
   });
 }
@@ -324,7 +331,7 @@ d3 = require("d3@7")
 
 ::: {.callout-note}
 ## Lendo o widget
-Com **K=1** a reconstrução é uma senoide pura - não captura a queda de dezembro. Subindo K, os harmônicos "esculpem" o formato real. É o mesmo princípio do periodograma acima: mais harmônicos = mais flexibilidade, ao custo de mais parâmetros (risco de overfitting). O Prophet usa exatamente isso para sazonalidade.
+Com **K=1** a reconstrução é uma senoide pura - não captura a queda de dezembro. Subindo K, os harmônicos "esculpem" o formato real e o erro **cai monotonicamente**. Isso é o **teorema de Fourier**: qualquer função contínua e periódica pode ser aproximada tão bem quanto se queira por uma soma de senos e cossenos - basta usar harmônicos suficientes. Daí o `sin/cos` de calendário e a base de Fourier do Prophet: poucos termos já capturam sazonalidades suaves; o custo é mais parâmetros (risco de overfitting com pouca amostra).
 :::
 
 ### Outras técnicas avançadas (quando o básico não basta)
@@ -389,53 +396,40 @@ viewof cv_h = Inputs.range([6, 18], {
   const W = cv_njanelas;
   const h = cv_h;
   const slidingTrain = 48;       // janela fixa de 4 anos no modo Sliding
-  const covid = 98;              // mar/2020 (indice a partir de jan/2012)
 
-  // um segmento Treino e um segmento Teste por janela (x quantitativo)
-  const segs = [];
+  const data = [];
   for (let s = 0; s < W; s++) {
     const testStart  = T - (W - s) * h;          // = test_starts do codigo
     const testEnd    = testStart + h;
     const trainStart = cv_metodo === "Expanding"
       ? 0
       : Math.max(0, testStart - slidingTrain);
-    const jan = `Janela ${s + 1}`;
-    segs.push({ janela: jan, x1: trainStart, x2: testStart, tipo: "Treino" });
-    segs.push({ janela: jan, x1: testStart,  x2: testEnd,   tipo: "Teste (prevê 12m)" });
+    for (let t = 0; t < T; t++) {
+      let tipo = "Não usado";
+      if (t >= trainStart && t < testStart) tipo = "Treino";
+      else if (t >= testStart && t < testEnd) tipo = "Teste (prevê 12m)";
+      if (tipo !== "Não usado")
+        data.push({ janela: `Janela ${s + 1}`, t, tipo });
+    }
   }
 
   return Plot.plot({
     width: 820,
-    height: 70 + W * 40,
+    height: 70 + W * 38,
     marginLeft: 80,
-    x: { label: "Mês (t) - início = jan/2012", domain: [0, T] },
+    x: { label: "Mês (t) - início = jan/2012" },
     y: { label: null,
          domain: Array.from({ length: W }, (_, i) => `Janela ${i + 1}`) },
     color: { domain: ["Treino", "Teste (prevê 12m)"],
              range: ["#3ACC9F", "#E50505"], legend: true },
     marks: [
-      Plot.rectX(segs, {
-        x1: "x1", x2: "x2", y: "janela", fill: "tipo", inset: 1
-      }),
-      Plot.ruleX([covid], { stroke: "#5B5B5B", strokeDasharray: "4,3" }),
-      Plot.text([{ x: covid, janela: "Janela 1" }], {
-        x: "x", y: "janela", text: () => "COVID (mar/2020)",
-        dy: -24, fill: "#5B5B5B", fontSize: 11, textAnchor: "middle"
-      })
+      Plot.cell(data, { x: "t", y: "janela", fill: "tipo" })
     ],
     title: `${cv_metodo} window · ${W} janelas · h = ${h} `
          + `(teste = últimos ${W * h} meses)`
   });
 }
 ```
-
-::: {.callout-tip}
-## O que observar no widget
-- Em **Expanding** (padrão), o bloco verde de treino **cresce** a cada janela e sempre começa em jan/2012 - nenhum dado é descartado.
-- Troque para **Sliding**: o treino vira uma faixa fixa que "desliza". Numa série de só ~170 meses, isso **joga fora anos de histórico** a cada janela - por isso o lab usa *expanding*.
-- O bloco vermelho (teste) **nunca se sobrepõe** entre janelas (`step_size = h`) e sempre vem **depois** do treino - é isso que garante a validação honesta.
-- A linha tracejada marca o choque da COVID: note como ele cai em janelas de treino diferentes conforme você muda `h`.
-:::
 
 ## 1.5 Rodando os modelos - sklearn na unha
 
@@ -758,6 +752,7 @@ A tabela acima usa só os modelos que rodam leves no site. Mas a pergunta natura
 | **GradientBoosting** (sklearn) | 21.858 | 27.262 | 0,47 |
 | **AutoARIMA** | 23.680 | 27.914 | 0,51 |
 | **SeasonalNaive** (baseline) | 23.887 | 30.482 | 0,51 |
+| **LSTM** (do zero, normalizado) | 24.385 | 29.212 | 0,52 |
 | **LightGBM** | 25.689 | 33.201 | 0,55 |
 | **N-BEATS** (treinado do zero) | 29.710 | 40.876 | 0,64 |
 
@@ -766,7 +761,7 @@ A tabela acima usa só os modelos que rodam leves no site. Mas a pergunta natura
 
 1. **O modelo mais simples venceu.** Um `AutoETS` - três equações de suavização - bateu LightGBM, N-BEATS e o foundation model. Em séries univariadas, mensais, com ~168 observações, sazonalidade limpa e tendência suave, **é exatamente o esperado**: não há dados nem complexidade de sinal que justifiquem deep learning.
 2. **Chronos *zero-shot* foi competitivo sem ver um único ponto desta série** (MASE 0,47, empatado com o GradientBoosting e bem acima do `snaive`). Esse é o valor real dos foundation models: um baseline forte **de graça**, sem treino nem tuning - ótimo para prototipagem.
-3. **N-BEATS foi o pior.** Rede neural treinada do zero com ~168 pontos não tem dados para aprender - overfitta o ruído. Reforça a regra: deep learning pede **muitos** dados (ou muitas séries).
+3. **As redes do zero decepcionaram.** O LSTM mal empata com o `SeasonalNaive` e o N-BEATS foi o pior de todos - com ~168 pontos não há dados para a rede aprender (ela overfitta o ruído). Reforça a regra: deep learning pede **muitos** dados (ou muitas séries).
 4. **LightGBM perdeu para o GradientBoosting do sklearn** aqui - não porque é pior, mas porque com poucos dados e sem tuning de hiperparâmetros o ganho do LightGBM não aparece. Em M5 (42 mil séries) a história se inverte.
 
 Moral: **suba a escada de complexidade só enquanto o ganho pagar o custo**, e *benchmark no seu próprio dado* - nunca por reputação do modelo.
@@ -849,30 +844,45 @@ Quando há **muitos dados**, múltiplas séries relacionadas ou padrões não-li
 | **DeepAR** | Probabilístico, intervalos nativos | Muitas séries relacionadas |
 | **TFT** | Transformer multi-horizonte com atenção interpretável | Multi-variável com covariáveis ricas |
 
-### Entendendo o N-BEATS sem jargão
+### N-BEATS - arquitetura
 
-Pense em **descascar a série em camadas**. O N-BEATS empilha vários **blocos**. O primeiro bloco olha a janela recente e tenta explicar **um pedaço** do padrão (por exemplo, a tendência). O que ele não conseguiu explicar - o **resíduo** - passa para o próximo bloco, que tenta explicar **outro pedaço** (por exemplo, a sazonalidade). Isso se repete por alguns blocos. No fim, **somam-se as contribuições de todos os blocos**: essa soma é a previsão.
+A entrada é uma janela fixa com as últimas $L$ observações (o *lookback*). A rede é uma **pilha de blocos**; cada bloco é um MLP pequeno (poucas camadas densas com ReLU) que produz, por duas projeções lineares, **duas saídas**:
 
-Não há ARIMA nem suavização por dentro - só redes simples (camadas densas) aprendendo a fatiar o sinal. O **NHITS** é a mesma ideia, mas olhando a série em várias resoluções (do detalhe ao geral), o que o deixa melhor em horizontes longos.
+- **backcast**: a estimativa do bloco para a própria janela de entrada;
+- **forecast**: a contribuição do bloco para os $H$ valores futuros.
+
+O encadeamento é **duplamente residual**: o bloco seguinte recebe a entrada **menos o backcast** do bloco anterior (o resíduo - a parte que o bloco anterior não explicou). A previsão final é a **soma dos forecasts** de todos os blocos. Não há recorrência nem convolução: são só MLPs sobre o vetor de lookback, o que torna o treino rápido e paralelizável.
+
+Há duas variantes: a **interpretável** restringe a saída de cada bloco a uma base (polinomial → tendência; Fourier → sazonalidade), de modo que a soma se decompõe em tendência + sazonalidade; a **genérica** não impõe base (mais precisa, menos interpretável). O **NHITS** acrescenta amostragem em múltiplas taxas (pooling), com blocos modelando frequências diferentes - mais barato e melhor em horizontes longos.
 
 ```{mermaid}
 flowchart LR
-    I["Janela recente"] --> B1["Bloco 1<br/>pega a tendência"]
-    B1 --> R1["resíduo"]
-    R1 --> B2["Bloco 2<br/>pega a sazonalidade"]
-    B2 --> R2["resíduo"]
-    R2 --> B3["Bloco 3<br/>refina"]
-    B1 --> S["Soma das partes<br/>= previsão"]
+    I["Lookback<br/>(últimos L meses)"] --> B1["Bloco 1<br/>(MLP)"]
+    B1 --> BC1["backcast 1"]
+    I --> R1["resíduo 1 =<br/>entrada − backcast 1"]
+    BC1 --> R1
+    R1 --> B2["Bloco 2<br/>(MLP)"]
+    B2 --> BC2["backcast 2"]
+    R1 --> R2["resíduo 2 → Bloco 3 ..."]
+    BC2 --> R2
+    B1 --> S["Σ forecasts<br/>= previsão (H passos)"]
     B2 --> S
-    B3 --> S
+    R2 --> S
     style I fill:#5B5B5B,color:#fff
     style B1 fill:#E50505,color:#fff
-    style B2 fill:#FFCC00,color:#000
-    style B3 fill:#3ACC9F,color:#fff
+    style B2 fill:#E50505,color:#fff
     style S fill:#3ACC9F,color:#fff
+    style BC1 fill:#ffffff,color:#000,stroke:#5B5B5B
+    style BC2 fill:#ffffff,color:#000,stroke:#5B5B5B
     style R1 fill:#ffffff,color:#000,stroke:#5B5B5B
     style R2 fill:#ffffff,color:#000,stroke:#5B5B5B
 ```
+
+### LSTM - arquitetura
+
+O LSTM é uma **rede recorrente**: percorre a série passo a passo mantendo um **estado interno** (memória) atualizado a cada observação. Três **portas** (entrada, esquecimento, saída) decidem o que escrever, descartar e ler do estado - mecanismo que combate o *vanishing gradient* e permite carregar informação por defasagens longas. Para previsão, alimenta-se a janela recente; o estado final (ou um decodificador) gera os $H$ passos à frente. É **sequencial por natureza** (mais lento de treinar que N-BEATS/TCN), **sensível à escala** (exige normalizar a série) e **faminto por dados**.
+
+**Resultados nesta série** (mesma CV, tabela da seção 2.5): o **LSTM** (normalizado, do zero) ficou em MASE **0,52** - praticamente empatado com o `SeasonalNaive`; o **N-BEATS** foi o pior (0,64). Com ~170 pontos não há dados suficientes para uma rede aprender; é o resultado esperado e o motivo de, neste lab, os modelos estruturais simples vencerem.
 
 ```python
 # Em DARTS, trocar de modelo é trocar uma linha:
@@ -988,13 +998,6 @@ O código acima é **zero-shot**: o modelo chega congelado e prevê direto - foi
 - **Domínios atípicos**: séries financeiras de alta frequência e padrões muito específicos ainda são caso difícil - o pré-treino pode não ter "visto" nada parecido.
 - **Custo/infra**: modelos grandes pedem GPU; APIs (TimeGPT) têm custo e dependência externa.
 - **Não são mágica**: em benchmarks como GIFT-Eval/TFB, um LightGBM bem ajustado ainda ganha em muitos casos com dados próprios suficientes.
-:::
-
-::: {.callout-tip}
-## Quando vale o foundation model (regra de bolso)
-✅ Pouco histórico · baseline rápido · muitas séries heterogêneas · prototipagem.
-❌ Domínio muito específico sem similaridade com o pré-treino · interpretabilidade obrigatória · alta frequência financeira.
-**No trabalho intermediário:** vale testar o Chronos via DARTS como *zero-shot* e comparar com o seu SARIMA - ótimo argumento de pitch ("testamos a fronteira e mesmo assim o SARIMA com tratamento da quebra venceu/perdeu por X").
 :::
 
 ## Tendências (2024–2026)

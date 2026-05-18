@@ -426,32 +426,33 @@ cv_nb.head(3)
 ## 5. Foundation model: Chronos (zero-shot)
 
 Modelos pré-treinados preveem *zero-shot* (sem treinar). O **Chronos**
-(Amazon) é o mais fácil: open-source, roda na CPU, sem chave de API. Para
-rodar nas mesmas janelas, precisamos organizar o código na mão, mas é tranquilo.
+(Amazon) está **integrado no DARTS** (`Chronos2Model`), então usamos a mesma
+API `historical_forecasts` dos outros modelos - o código fica uniforme. O
+`fit` aqui **não treina** (o modelo já vem pré-treinado); ele só registra a
+série, e `retrain=False` garante o uso *zero-shot* a cada janela.
 
 ```{python}
-# Chronos (Amazon) - pip install chronos-forecasting
-import torch
-from chronos import BaseChronosPipeline
+# Chronos via DARTS - pip install "u8darts[all]"
+from darts import concatenate
+from darts.models import Chronos2Model
 
-pipe = BaseChronosPipeline.from_pretrained(
-    "amazon/chronos-bolt-small", device_map="cpu", torch_dtype=torch.float32
+n, H = len(df), 12
+chronos = Chronos2Model(input_chunk_length=96, output_chunk_length=H)
+chronos.fit(serie[:n - 48])          # nao treina (pre-treinado); so registra
+
+hf_ch = chronos.historical_forecasts(
+    serie,
+    start=serie.time_index[n - 48],  # ultimos 48 meses = 4 janelas de 12
+    forecast_horizon=H,
+    stride=H,                        # janelas sem sobreposicao
+    retrain=False,                   # zero-shot: usa o modelo como esta
+    last_points_only=False,
+    verbose=False,
 )
-
-n, H, W = len(df), 12, 4
-test_starts = [n - (W - i) * H for i in range(W)]   # mesmos cortes da CV
-
-linhas = []
-for start in test_starts:
-    ctx = torch.tensor(df["y"].iloc[:start].values, dtype=torch.float32)
-    _, mean = pipe.predict_quantiles(               # zero-shot: nenhum treino
-        ctx, prediction_length=H, quantile_levels=[0.5]
-    )
-    linhas.append(pd.DataFrame({
-        "ds": df.index[start:start + H],
-        "chronos": mean.numpy().flatten()[:H],
-    }))
-cv_chronos = pd.concat(linhas, ignore_index=True)
+cv_chronos = (
+    concatenate(hf_ch).to_series()
+    .rename("chronos").rename_axis("ds").reset_index()
+)
 cv_chronos.head(3)
 ```
 
