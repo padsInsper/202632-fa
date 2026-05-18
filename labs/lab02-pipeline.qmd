@@ -865,30 +865,9 @@ flowchart LR
 
 O LSTM lê a série **passo a passo** carregando uma **memória** (o estado da célula). A cada observação, três **portas** decidem o que **esquecer** da memória, que **informação nova** gravar e o que **ler** dela para a saída - é esse controle que deixa a rede "lembrar" de coisas distantes no tempo sem o gradiente sumir. Para prever, você passa a janela recente e a rede projeta os $H$ passos à frente. Na prática: treina mais devagar (é sequencial), **exige normalizar a série** e precisa de bastante dado.
 
-```{mermaid}
-flowchart LR
-    X["x(t)<br/>valor do mês t"] --> G["Portas<br/>esquecer · entrada · saída"]
-    HP["h(t-1)<br/>saída anterior"] --> G
-    CP["C(t-1)<br/>memória"] --> FG["× esquecer"]
-    G --> FG
-    G --> IG["+ informação nova"]
-    FG --> C["C(t)<br/>memória atualizada"]
-    IG --> C
-    C --> OG["× saída"]
-    G --> OG
-    OG --> H["h(t)<br/>saída do mês t"]
-    style X fill:#5B5B5B,color:#fff
-    style HP fill:#5B5B5B,color:#fff
-    style CP fill:#FFCC00,color:#000
-    style C fill:#FFCC00,color:#000
-    style G fill:#E50505,color:#fff
-    style FG fill:#ffffff,color:#000,stroke:#5B5B5B
-    style IG fill:#ffffff,color:#000,stroke:#5B5B5B
-    style OG fill:#ffffff,color:#000,stroke:#5B5B5B
-    style H fill:#3ACC9F,color:#fff
-```
+![Célula LSTM: o estado da memória (linha de cima) é atualizado por uma porta de **esquecimento** (×), recebe **informação nova** (+) e passa por uma porta de **saída** (×) para gerar o estado oculto. As ativações vêm da concatenação $[h_{t-1}, x_t]$.](../assets/img/lstm-cell.gif){#fig-lstm fig-alt="Diagrama animado de uma célula LSTM com as portas de esquecimento, entrada e saída" width="90%"}
 
-> Diagrama: esquema próprio da célula LSTM (arquitetura padrão). Para um passo a passo visual com as equações e animações, recomendo a leitura: Nguyen, M. (2018), [*Illustrated Guide to LSTM's and GRU's: A step by step explanation*](https://medium.com/data-science/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21).
+> Crédito da figura: Michael Phi (Nguyen), [*Illustrated Guide to LSTM's and GRU's: A step by step explanation*](https://medium.com/data-science/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21) (2018) - usada aqui com fins didáticos. Para o material de referência sobre LSTMs, veja também Christopher Olah, [*Understanding LSTM Networks*](https://colah.github.io/posts/2015-08-Understanding-LSTMs/) (2015).
 
 **Resultados nesta série** (mesma CV, tabela da seção 2.5): o **LSTM** (normalizado, do zero) ficou em MASE **0,52** - praticamente empatado com o `SeasonalNaive`; o **N-BEATS** foi o pior (0,64). Com ~170 pontos não há dados para uma rede aprender; é o esperado, e o motivo de, neste lab, os modelos estruturais simples vencerem.
 
