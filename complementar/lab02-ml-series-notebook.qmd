@@ -423,6 +423,42 @@ cv_nb = (
 cv_nb.head(3)
 ```
 
+### LSTM (DARTS)
+
+Rede recorrente, também do zero e no mesmo protocolo. Diferença prática: o
+LSTM é **sensível à escala**, então normalizamos a série com `Scaler` antes
+de treinar e desfazemos a transformação na previsão.
+
+```{python}
+from darts.models import RNNModel
+from darts.dataprocessing.transformers import Scaler
+
+sc = Scaler()                       # LSTM exige normalizar a serie
+serie_s = sc.fit_transform(serie)
+
+lstm = RNNModel(
+    model="LSTM",
+    input_chunk_length=24,
+    training_length=36,
+    n_epochs=200,
+    random_state=42,
+)
+hf_lstm = lstm.historical_forecasts(
+    serie_s,
+    start=serie_s.time_index[n - 48],
+    forecast_horizon=12,
+    stride=12,
+    retrain=True,
+    last_points_only=False,
+    verbose=False,
+)
+cv_lstm = (
+    pd.concat([sc.inverse_transform(h).to_series() for h in hf_lstm])
+    .rename("lstm").rename_axis("ds").reset_index()
+)
+cv_lstm.head(3)
+```
+
 ## 5. Foundation model: Chronos (zero-shot)
 
 Modelos pré-treinados preveem *zero-shot* (sem treinar). O **Chronos**
@@ -490,13 +526,14 @@ eval_df = (
     .merge(cv_mlf[["ds", "lgbm_mlf"]], on="ds")
     .merge(cv_lgbm[["ds", "lgbm_darts"]], on="ds")
     .merge(cv_nb[["ds", "nbeats"]], on="ds")
+    .merge(cv_lstm[["ds", "lstm"]], on="ds")
     .merge(cv_chronos[["ds", "chronos"]], on="ds")
 )
 assert len(eval_df) == 48, f"esperava 48 pontos, obtive {len(eval_df)}"
 
 y_train = df["y"].iloc[:-48].values
 modelos = ["snaive", "ets", "arima", "arima_boost", "boost_manual",
-           "lgbm_mlf", "lgbm_darts", "nbeats", "chronos"]
+           "lgbm_mlf", "lgbm_darts", "nbeats", "lstm", "chronos"]
 resumo = pd.DataFrame({
     nome: metricas(eval_df["y"], eval_df[nome], y_train)
     for nome in modelos

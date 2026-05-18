@@ -844,45 +844,53 @@ Quando há **muitos dados**, múltiplas séries relacionadas ou padrões não-li
 | **DeepAR** | Probabilístico, intervalos nativos | Muitas séries relacionadas |
 | **TFT** | Transformer multi-horizonte com atenção interpretável | Multi-variável com covariáveis ricas |
 
-### N-BEATS - arquitetura
+### N-BEATS - na prática
 
-A entrada é uma janela fixa com as últimas $L$ observações (o *lookback*). A rede é uma **pilha de blocos**; cada bloco é um MLP pequeno (poucas camadas densas com ReLU) que produz, por duas projeções lineares, **duas saídas**:
+Na prática, o N-BEATS é uma **rede feed-forward** em que você entrega uma janela com as últimas $L$ observações e ela devolve **direto** os próximos $H$ valores. Você **não escolhe ordens** $(p,d,q)$, não diferencia, não monta features na mão: a rede aprende sozinha o mapeamento *janela → futuro*, inclusive padrões não-lineares.
 
-- **backcast**: a estimativa do bloco para a própria janela de entrada;
-- **forecast**: a contribuição do bloco para os $H$ valores futuros.
-
-O encadeamento é **duplamente residual**: o bloco seguinte recebe a entrada **menos o backcast** do bloco anterior (o resíduo - a parte que o bloco anterior não explicou). A previsão final é a **soma dos forecasts** de todos os blocos. Não há recorrência nem convolução: são só MLPs sobre o vetor de lookback, o que torna o treino rápido e paralelizável.
-
-Há duas variantes: a **interpretável** restringe a saída de cada bloco a uma base (polinomial → tendência; Fourier → sazonalidade), de modo que a soma se decompõe em tendência + sazonalidade; a **genérica** não impõe base (mais precisa, menos interpretável). O **NHITS** acrescenta amostragem em múltiplas taxas (pooling), com blocos modelando frequências diferentes - mais barato e melhor em horizontes longos.
+Por dentro, ela soma a contribuição de vários "blocos", onde cada bloco refina o que o anterior não conseguiu explicar (resíduo). Numa variante, esses blocos viram explicitamente **tendência + sazonalidade**, o que dá uma previsão interpretável (parecido com uma decomposição aprendida). O **NHITS** é a evolução: olha a série em várias resoluções e costuma ir melhor em horizontes longos.
 
 ```{mermaid}
 flowchart LR
-    I["Lookback<br/>(últimos L meses)"] --> B1["Bloco 1<br/>(MLP)"]
-    B1 --> BC1["backcast 1"]
-    I --> R1["resíduo 1 =<br/>entrada − backcast 1"]
-    BC1 --> R1
-    R1 --> B2["Bloco 2<br/>(MLP)"]
-    B2 --> BC2["backcast 2"]
-    R1 --> R2["resíduo 2 → Bloco 3 ..."]
-    BC2 --> R2
-    B1 --> S["Σ forecasts<br/>= previsão (H passos)"]
-    B2 --> S
-    R2 --> S
+    I["Janela de entrada<br/>(últimos L meses)"] --> N["Rede N-BEATS<br/>(pilha de blocos)"]
+    N --> O["Previsão<br/>(próximos H meses)"]
     style I fill:#5B5B5B,color:#fff
-    style B1 fill:#E50505,color:#fff
-    style B2 fill:#E50505,color:#fff
-    style S fill:#3ACC9F,color:#fff
-    style BC1 fill:#ffffff,color:#000,stroke:#5B5B5B
-    style BC2 fill:#ffffff,color:#000,stroke:#5B5B5B
-    style R1 fill:#ffffff,color:#000,stroke:#5B5B5B
-    style R2 fill:#ffffff,color:#000,stroke:#5B5B5B
+    style N fill:#E50505,color:#fff
+    style O fill:#3ACC9F,color:#fff
 ```
 
-### LSTM - arquitetura
+**Quando considerar:** você tem **muitas séries** ou uma série **longa** e quer um modelo forte sem feature engineering manual. **Caveat:** é faminto por dados - aqui, com ~170 meses, ele perde feio (veja a tabela da seção 2.5).
 
-O LSTM é uma **rede recorrente**: percorre a série passo a passo mantendo um **estado interno** (memória) atualizado a cada observação. Três **portas** (entrada, esquecimento, saída) decidem o que escrever, descartar e ler do estado - mecanismo que combate o *vanishing gradient* e permite carregar informação por defasagens longas. Para previsão, alimenta-se a janela recente; o estado final (ou um decodificador) gera os $H$ passos à frente. É **sequencial por natureza** (mais lento de treinar que N-BEATS/TCN), **sensível à escala** (exige normalizar a série) e **faminto por dados**.
+### LSTM - na prática
 
-**Resultados nesta série** (mesma CV, tabela da seção 2.5): o **LSTM** (normalizado, do zero) ficou em MASE **0,52** - praticamente empatado com o `SeasonalNaive`; o **N-BEATS** foi o pior (0,64). Com ~170 pontos não há dados suficientes para uma rede aprender; é o resultado esperado e o motivo de, neste lab, os modelos estruturais simples vencerem.
+O LSTM lê a série **passo a passo** carregando uma **memória** (o estado da célula). A cada observação, três **portas** decidem o que **esquecer** da memória, que **informação nova** gravar e o que **ler** dela para a saída - é esse controle que deixa a rede "lembrar" de coisas distantes no tempo sem o gradiente sumir. Para prever, você passa a janela recente e a rede projeta os $H$ passos à frente. Na prática: treina mais devagar (é sequencial), **exige normalizar a série** e precisa de bastante dado.
+
+```{mermaid}
+flowchart LR
+    X["x(t)<br/>valor do mês t"] --> G["Portas<br/>esquecer · entrada · saída"]
+    HP["h(t-1)<br/>saída anterior"] --> G
+    CP["C(t-1)<br/>memória"] --> FG["× esquecer"]
+    G --> FG
+    G --> IG["+ informação nova"]
+    FG --> C["C(t)<br/>memória atualizada"]
+    IG --> C
+    C --> OG["× saída"]
+    G --> OG
+    OG --> H["h(t)<br/>saída do mês t"]
+    style X fill:#5B5B5B,color:#fff
+    style HP fill:#5B5B5B,color:#fff
+    style CP fill:#FFCC00,color:#000
+    style C fill:#FFCC00,color:#000
+    style G fill:#E50505,color:#fff
+    style FG fill:#ffffff,color:#000,stroke:#5B5B5B
+    style IG fill:#ffffff,color:#000,stroke:#5B5B5B
+    style OG fill:#ffffff,color:#000,stroke:#5B5B5B
+    style H fill:#3ACC9F,color:#fff
+```
+
+> Diagrama: esquema próprio da célula LSTM (arquitetura padrão). Para um passo a passo visual com as equações e animações, recomendo a leitura: Nguyen, M. (2018), [*Illustrated Guide to LSTM's and GRU's: A step by step explanation*](https://medium.com/data-science/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21).
+
+**Resultados nesta série** (mesma CV, tabela da seção 2.5): o **LSTM** (normalizado, do zero) ficou em MASE **0,52** - praticamente empatado com o `SeasonalNaive`; o **N-BEATS** foi o pior (0,64). Com ~170 pontos não há dados para uma rede aprender; é o esperado, e o motivo de, neste lab, os modelos estruturais simples vencerem.
 
 ```python
 # Em DARTS, trocar de modelo é trocar uma linha:
