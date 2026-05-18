@@ -1,6 +1,5 @@
 ---
 title: "Lab 2: Machine Learning para Séries Temporais"
-subtitle: "Do feature engineering aos foundation models - overview prático + tempo de trabalho intermediário"
 format:
   html:
     code-fold: true
@@ -16,20 +15,6 @@ format:
 - [Criar]{.bloom-badge .bloom-criar} o esqueleto da entrega intermediária com apoio do monitor
 :::
 
-## Como o lab está organizado (3h30)
-
-| Bloco | Tempo | O que vamos fazer |
-|---|---|---|
-| **0. Revisão da Parte 1** | 20 min | Recap relâmpago (decomposição, ARIMA/SARIMA, validação) |
-| **Parte 1 - ML "tabular" para séries** | 40 min | Feature engineering (básico → FFT) + rodar modelos (sklearn, MLForecast, DARTS) |
-| **Parte 2 - Modelos com a ordem na arquitetura** | 35 min | ARIMA → ARIMA-Boost → ETS → redes neurais → foundation models |
-| **Trabalho intermediário (office hours)** | 115 min | Tempo dedicado para a entrega - o monitor circula |
-
-::: {.callout-tip}
-## Filosofia do bloco de conteúdo
-Este é um **overview-referência**, não uma aula completa. A meta é que vocês saiam sabendo *o que existe lá fora*, *como cada família funciona por dentro* e *quando vale a pena experimentar* - não dominando cada arquitetura. Tudo aqui é material para revisitar depois; as referências no final são o ponto de partida para aprofundar.
-:::
-
 ::: {.caso-negocio}
 #### O caso que vai nos acompanhar o lab inteiro
 
@@ -42,7 +27,7 @@ Vocês são a assessoria **PADS Forecasting**. Uma **montadora de veículos** qu
 A mesma série será o fio condutor da Parte 1 e da Parte 2.
 :::
 
-# Bloco 0 - Revisão da Parte 1 (20 min)
+# Revisão da Parte 1
 
 ::: {.callout-note}
 ## Os 5 pilares da Parte 1
@@ -114,7 +99,7 @@ ML para séries não é só "prever o próximo valor":
 
 Adaptado de [Oudre (2023)](https://www.laurentoudre.fr/ast/AST0.pdf). Nosso foco é **predição**, mas detecção de anomalias e classificação usam as mesmas ferramentas.
 
-# Parte 1 - ML "tabular" para séries (40 min)
+# Parte 1 - ML "tabular" para séries
 
 A grande ideia do ML aplicado a séries: **transformar o problema temporal em um problema tabular** via *features*, e jogar um modelo de regressão usual em cima.
 
@@ -357,11 +342,11 @@ Com **K=1** a reconstrução é uma senoide pura - não captura a queda de dezem
 Em competições reais (M5, M6), times no top-10 usaram quase só lags + rolling + calendário com LightGBM. Sofisticação extra costuma ser marginal - mas saber que existe te tira de apuros em séries difíceis.
 :::
 
-## 1.4 O esquema de validação - o mesmo o lab inteiro {#sec-cv}
+## 1.4 Esquema de validação {#sec-cv}
 
-**Toda** comparação deste lab (Parte 1 e Parte 2, sklearn, `statsforecast` e a tabela ampliada com Chronos) usa **exatamente o mesmo protocolo**, para que os números sejam comparáveis entre si. Vamos deixá-lo explícito antes de qualquer modelo rodar.
+Antes de rodar os modelos, fixamos o esquema de validação usado nas comparações.
 
-::: {.callout-important}
+::: {.callout-note}
 ## Protocolo: *expanding window*, 4 janelas, h = 12, sem embaralhar
 
 Seja $T$ o último mês disponível. Reservamos os **últimos 48 meses** e os quebramos em **4 janelas consecutivas de 12 meses**. Em cada janela, o modelo treina em **tudo que veio antes** e prevê os **12 meses seguintes** (que ele nunca viu):
@@ -406,39 +391,38 @@ viewof cv_h = Inputs.range([6, 18], {
   const slidingTrain = 48;       // janela fixa de 4 anos no modo Sliding
   const covid = 98;              // mar/2020 (indice a partir de jan/2012)
 
-  const data = [];
+  // um segmento Treino e um segmento Teste por janela (x quantitativo)
+  const segs = [];
   for (let s = 0; s < W; s++) {
-    const testStart = T - (W - s) * h;          // = test_starts do codigo
-    const testEnd   = testStart + h;
+    const testStart  = T - (W - s) * h;          // = test_starts do codigo
+    const testEnd    = testStart + h;
     const trainStart = cv_metodo === "Expanding"
       ? 0
       : Math.max(0, testStart - slidingTrain);
-    for (let t = 0; t < T; t++) {
-      let tipo = "Não usado";
-      if (t >= trainStart && t < testStart) tipo = "Treino";
-      else if (t >= testStart && t < testEnd) tipo = "Teste (prevê 12m)";
-      data.push({ janela: `Janela ${s + 1}`, t, tipo });
-    }
+    const jan = `Janela ${s + 1}`;
+    segs.push({ janela: jan, x1: trainStart, x2: testStart, tipo: "Treino" });
+    segs.push({ janela: jan, x1: testStart,  x2: testEnd,   tipo: "Teste (prevê 12m)" });
   }
 
   return Plot.plot({
     width: 820,
-    height: 70 + W * 38,
+    height: 70 + W * 40,
     marginLeft: 80,
-    marks: [
-      Plot.cell(data.filter(d => d.tipo !== "Não usado"),
-        { x: "t", y: "janela", fill: "tipo", inset: 0.5 }),
-      Plot.ruleX([covid], { stroke: "#5B5B5B", strokeDasharray: "4,3" }),
-      Plot.text([{ t: covid }], {
-        x: "t", y: () => `Janela 1`, text: () => "COVID (mar/2020)",
-        dy: -22, fill: "#5B5B5B", fontSize: 11, textAnchor: "middle"
-      })
-    ],
     x: { label: "Mês (t) - início = jan/2012", domain: [0, T] },
     y: { label: null,
          domain: Array.from({ length: W }, (_, i) => `Janela ${i + 1}`) },
     color: { domain: ["Treino", "Teste (prevê 12m)"],
              range: ["#3ACC9F", "#E50505"], legend: true },
+    marks: [
+      Plot.rectX(segs, {
+        x1: "x1", x2: "x2", y: "janela", fill: "tipo", inset: 1
+      }),
+      Plot.ruleX([covid], { stroke: "#5B5B5B", strokeDasharray: "4,3" }),
+      Plot.text([{ x: covid, janela: "Janela 1" }], {
+        x: "x", y: "janela", text: () => "COVID (mar/2020)",
+        dy: -24, fill: "#5B5B5B", fontSize: 11, textAnchor: "middle"
+      })
+    ],
     title: `${cv_metodo} window · ${W} janelas · h = ${h} `
          + `(teste = últimos ${W * h} meses)`
   });
@@ -451,18 +435,6 @@ viewof cv_h = Inputs.range([6, 18], {
 - Troque para **Sliding**: o treino vira uma faixa fixa que "desliza". Numa série de só ~170 meses, isso **joga fora anos de histórico** a cada janela - por isso o lab usa *expanding*.
 - O bloco vermelho (teste) **nunca se sobrepõe** entre janelas (`step_size = h`) e sempre vem **depois** do treino - é isso que garante a validação honesta.
 - A linha tracejada marca o choque da COVID: note como ele cai em janelas de treino diferentes conforme você muda `h`.
-:::
-
-::: {.callout-note}
-## Por que **este** esquema (e não outro)
-
-1. **Respeita a causalidade.** O treino sempre *precede* o teste no tempo. Nada de k-fold embaralhado - isso deixaria o modelo "ver o futuro" e produziria métricas otimistas que não se sustentam em produção (o *leakage* da seção 0).
-2. **Imita a operação real.** A montadora re-treina o modelo uma vez por ano e prevê o próximo ano. Cada janela reproduz literalmente esse ciclo de re-treino + previsão de 12 meses.
-3. **`h = 12` é o horizonte de negócio.** O orçamento e o planejamento de compras são anuais - e é também o horizonte da entrega intermediária. Validamos no horizonte que realmente importa.
-4. **4 janelas = robustez.** 48 meses de teste cobrem **regimes distintos** (recuperação pós-COVID, normalização, anos recentes). Um modelo que parece ótimo num corte e péssimo em outro é exposto - exatamente o que queremos antes de confiar nele.
-5. ***Expanding* e não *sliding*.** A série é curta (~170 meses). Descartar histórico antigo (janela deslizante de tamanho fixo) desperdiçaria dados escassos. Usaríamos *sliding* se houvesse uma quebra de regime tão forte que o passado distante atrapalhasse mais do que ajudasse - não é o caso aqui (a dummy `covid` já isola o choque).
-
-A teoria completa (*expanding* × *sliding*, com simulador interativo) está na [Aula 4 - Previsão e Validação](../aulas/aula04-previsao.qmd). Aqui a decisão já está tomada e fixada.
 :::
 
 ## 1.5 Rodando os modelos - sklearn na unha
@@ -580,7 +552,7 @@ hist = modelo.historical_forecasts(
 Para a entrega intermediária, qualquer uma - ou `scikit-learn` puro, como acima.
 :::
 
-# Parte 2 - Modelos com a ordem na arquitetura (35 min)
+# Parte 2 - Modelos com a ordem na arquitetura
 
 Na Parte 1 o modelo não "sabia" que os dados eram uma série - nós **inserimos** a ordem via features. Agora vamos a modelos onde a dependência temporal está **embutida na arquitetura**.
 
@@ -602,7 +574,7 @@ flowchart TD
     style E1 fill:#3ACC9F,color:#fff
 ```
 
-## 2.1 ARIMA - o ponto de partida (recap arquitetural)
+## 2.1 ARIMA - o ponto de partida
 
 ARIMA modela a **própria estrutura de autocorrelação**: cada valor é função linear dos valores e erros passados.
 
@@ -717,9 +689,9 @@ cv_h = cv_arima_boost(df["y"])
 cv_h.head(3)
 ```
 
-## 2.4 Comparando tudo com validação honesta
+## 2.4 Comparando tudo
 
-Mesmo protocolo da [seção 1.4](#sec-cv): *expanding window*, 4 janelas, `h=12`, sem embaralhar. Os modelos clássicos usam `StatsForecast.cross_validation` (que implementa esse esquema nativamente, com `step_size=12, n_windows=4`); o boosting e o híbrido replicam o mesmo corte à mão.
+Usamos o esquema de validação da [seção 1.4](#sec-cv). Os modelos clássicos usam `StatsForecast.cross_validation`; o boosting e o híbrido replicam o mesmo corte à mão.
 
 ```{python}
 #| label: comparar
@@ -877,26 +849,30 @@ Quando há **muitos dados**, múltiplas séries relacionadas ou padrões não-li
 | **DeepAR** | Probabilístico, intervalos nativos | Muitas séries relacionadas |
 | **TFT** | Transformer multi-horizonte com atenção interpretável | Multi-variável com covariáveis ricas |
 
+### Entendendo o N-BEATS sem jargão
+
+Pense em **descascar a série em camadas**. O N-BEATS empilha vários **blocos**. O primeiro bloco olha a janela recente e tenta explicar **um pedaço** do padrão (por exemplo, a tendência). O que ele não conseguiu explicar - o **resíduo** - passa para o próximo bloco, que tenta explicar **outro pedaço** (por exemplo, a sazonalidade). Isso se repete por alguns blocos. No fim, **somam-se as contribuições de todos os blocos**: essa soma é a previsão.
+
+Não há ARIMA nem suavização por dentro - só redes simples (camadas densas) aprendendo a fatiar o sinal. O **NHITS** é a mesma ideia, mas olhando a série em várias resoluções (do detalhe ao geral), o que o deixa melhor em horizontes longos.
+
 ```{mermaid}
 flowchart LR
-    subgraph NBEATS["N-BEATS / NHITS"]
-        I1["Janela de input"] --> S1["Stack tendência"]
-        I1 --> S2["Stack sazonalidade"]
-        S1 --> O1["forecast + backcast"]
-        S2 --> O1
-    end
-    subgraph TR["Transformer (self-attention)"]
-        I2["Sequência"] --> AT["Cada ponto 'olha'<br/>todos os outros"]
-        AT --> O2["Pesos de atenção<br/>(longo prazo)"]
-    end
-    style S1 fill:#E50505,color:#fff
-    style AT fill:#FFCC00,color:#000
+    I["Janela recente"] --> B1["Bloco 1<br/>pega a tendência"]
+    B1 --> R1["resíduo"]
+    R1 --> B2["Bloco 2<br/>pega a sazonalidade"]
+    B2 --> R2["resíduo"]
+    R2 --> B3["Bloco 3<br/>refina"]
+    B1 --> S["Soma das partes<br/>= previsão"]
+    B2 --> S
+    B3 --> S
+    style I fill:#5B5B5B,color:#fff
+    style B1 fill:#E50505,color:#fff
+    style B2 fill:#FFCC00,color:#000
+    style B3 fill:#3ACC9F,color:#fff
+    style S fill:#3ACC9F,color:#fff
+    style R1 fill:#ffffff,color:#000,stroke:#5B5B5B
+    style R2 fill:#ffffff,color:#000,stroke:#5B5B5B
 ```
-
-::: {.formula-highlight}
-[Self-attention (intuição)]{.formula-label}
-$$\text{Attention}(Q,K,V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V$$
-:::
 
 ```python
 # Em DARTS, trocar de modelo é trocar uma linha:
@@ -913,7 +889,7 @@ prev = modelo.predict(n=12)
 [Zeng et al. (2023) - *Are Transformers Effective for Time Series Forecasting?*](https://arxiv.org/abs/2205.13504) (2.500+ citações) mostrou que um **modelo linear simples (DLinear)** supera vários Transformers em benchmarks de longo horizonte. Mensagem: **complexidade não é proxy de qualidade**. Suba a escada: naive → ETS/ARIMA → boosting → neural → foundation, parando assim que o ganho não pagar o custo.
 :::
 
-# Benchmarks e competições - o panorama
+# Benchmarks e competições
 
 Antes de "qual modelo é o melhor?", a resposta honesta é: **depende da série, e a literatura mede isso com rigor**. Vale conhecer as referências que o pessoal cita em entrevista e em comitê técnico.
 
@@ -942,7 +918,7 @@ Antes de "qual modelo é o melhor?", a resposta honesta é: **depende da série,
 3. **Não existe almoço grátis universal.** O melhor modelo varia por frequência, horizonte e domínio - por isso *benchmark no seu próprio dado* é inegociável.
 :::
 
-# Foundation models preditivos - a fronteira
+# Foundation models
 
 A grande virada de 2024–2025: modelos **pré-treinados em bilhões de pontos de séries heterogêneas** que fazem *zero-shot forecasting* - você passa a série e ele prevê, **sem treinar nada**. É o "GPT das séries temporais".
 
@@ -1026,43 +1002,6 @@ O código acima é **zero-shot**: o modelo chega congelado e prevê direto - foi
 1. **Foundation models viraram baseline real.** Chronos, TimesFM, Moirai, TimeGPT, Time-MoE, TTM - *zero-shot* já entra como linha de comparação obrigatória.
 2. **LLMs reaproveitados** ([Time-LLM](https://arxiv.org/abs/2310.01728), [TEMPO](https://arxiv.org/abs/2310.04948)) - reprogramam GPT/Llama via *prompting* numérico. Promissor mas ainda nichado.
 3. **Lineares + boosting continuam imbatíveis** em muitos casos práticos com dados próprios suficientes (M5, TFB).
-
-# Bloco final - Office hours do Trabalho Intermediário (115 min)
-
-::: {.callout-important}
-## Como vamos usar esse tempo
-
-1. **Abram o enunciado:** [Trabalho Intermediário](../trabalhos/intermediario.qmd).
-2. **Trabalhem em grupo** (mesmo remoto, abram uma sala paralela).
-3. **O monitor circula** entre os grupos tirando dúvidas pontuais.
-4. **Usem o overview de hoje:** se quiserem testar ML/híbrido/foundation como alternativa ao SARIMA, agora é a hora.
-5. **Meta:** ter pelo menos um forecast rodando e o `previsao.csv` parcial.
-:::
-
-::: {.callout-tip}
-## Sugestão de roteiro
-
-| Tempo | Foco |
-|---|---|
-| 0–20 min | Carregar dados, gráfico inicial, decidir tratamento da aquisição (jul/2019) |
-| 20–60 min | 2–3 modelos candidatos (SeasonalNaive + AutoARIMA + um ML/híbrido) |
-| 60–90 min | Validação cruzada, escolher o melhor, diagnóstico residual |
-| 90–110 min | Forecast final, gráfico, exportar `previsao.csv` |
-| 110–115 min | Revisar checklist da entrega |
-:::
-
-::: {.callout-caution collapse="true"}
-## Exercício opcional - qual família como 2ª escolha (depois de SARIMA)?
-
-Considerem: (1) **histórico**: 120 meses - foundation *zero-shot* funciona; LSTM/N-BEATS "do zero" pedem >300 obs. (2) **Quebra estrutural** (aquisição jul/2019): ARIMA precisa de dummy/descarte; boosting absorve com `apos_aquisicao`; foundation lida natural. (3) **Sazonalidade** anual forte: SARIMA, Prophet, NHITS, LGBM com lag 12 capturam. (4) **Interpretabilidade**: boosting+SHAP, ARIMA, Prophet são defensáveis; foundation é black-box.
-
-**Recomendação:** SARIMA baseline + ARIMA-Boost ou LightGBM com `apos_aquisicao` + lags 1/12/24. Para ousar: Chronos via DARTS *zero-shot* e comparar.
-:::
-
-::: {.callout-note}
-## Versão notebook (sem firulas)
-Os códigos executáveis deste lab estão num notebook limpo, pronto para rodar com a turma e servir de template: veja **[Códigos → Lab 2: ML para séries (notebook)](../complementar/lab02-ml-series-notebook.ipynb)**.
-:::
 
 # Referências
 
