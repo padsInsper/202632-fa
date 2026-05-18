@@ -72,7 +72,7 @@ Mais importante do que gerar resultados é **entender o método**, desenvolver *
 
 | Entrega | Prazo | Conteúdo |
 |---------|-------|----------|
-| **Intermediária** | Semana de 18/mai | Análise completa de série temporal (Parte 1) |
+| **Intermediária** | 1/jun | Análise completa de série temporal (Parte 1) |
 | **Final** | Semana de 15/jun | Análise de portfólio com gestão de risco (Parte 2) |
 
 ## Ferramentas sugeridas

@@ -47,19 +47,22 @@ mudança que vocês vão ter que tratar na modelagem.
 
 | Quando | O quê |
 |---|---|
-| **Sex 22/mai, 18h–20h** | Apresentação do grupo e discussão (entrega: notebook e `previsao.csv`) |
-| **Sáb 23/mai, 15h–17h** | Construção da previsão de consenso da turma |
+| **Sex 22/mai, 18h–20h** | Apresentação de uma **prévia** do trabalho — sem nota, só feedback dos colegas e do monitor |
+| **Sáb 23/mai, 15h–17h** | Discussão da turma sobre a melhor forma de construir a **predição agregada** |
+| **Seg 1/jun** | Entrega final, valendo nota: relatório (notebook), `previsao.csv` do grupo e a predição agregada da turma |
 
 ## Avaliação
 
-A avaliação tem 4 componentes, totalizando 10 pontos:
+A avaliação tem 3 componentes, totalizando 10 pontos:
 
 | Componente | Pontos |
 |---|---|
-| Relatório (notebook) | 3,0 |
-| Apresentação na sexta (pitch e discussão) | 3,0 |
+| Relatório (notebook) | 6,0 |
 | (Competitivo) Previsão do grupo (ranking MASE) | 3,0 |
-| (Colaborativo) Previsão de consenso da turma (todos recebem o mesmo) | 1,0 |
+| (Colaborativo) Predição agregada da turma (todos recebem o mesmo) | 1,0 |
+
+A apresentação de sexta (22/mai) é uma **prévia sem nota**: serve para a turma
+trocar ideias e ajustar o rumo antes da entrega final de 1/jun.
 
 ## Dados
 
@@ -76,7 +79,7 @@ Os links de download direto:
 
 Cada CSV tem duas colunas: `data` (primeiro dia de cada mês) e `valor`.
 
-## O que entregar no notebook (3 pontos)
+## O que entregar no notebook (6 pontos)
 
 1. **Descrição inicial dos dados**: gráfico da série mostrando
    a aquisição, decomposição em tendência, sazonalidade e resíduo, testes
@@ -113,36 +116,29 @@ Cada CSV tem duas colunas: `data` (primeiro dia de cada mês) e `valor`.
 
 **Obs**: Recomendamos escrever 6 e 7 sem usar IA.
 
-**Como entra na nota (3 pontos)**:
+**Como entra na nota (6 pontos)**:
 
 | Critério | Pontos |
 |---|---|
-| Descrição dos dados (item 1) | 0,5 |
-| Modelos comparados e diagnóstico (item 3) | 0,5 |
-| Validação cruzada temporal (item 4) | 0,5 |
-| Previsão final e gráfico (item 5) | 0,5 |
-| Discussão e decisões (item 6) | 0,5 |
-| Descrição de uso de IA (item 7) | 0,5 | 
+| Descrição dos dados (item 1) | 1,0 |
+| Tratamento da aquisição (item 2) | 1,0 |
+| Modelos comparados e diagnóstico (item 3) | 1,0 |
+| Validação cruzada temporal (item 4) | 1,0 |
+| Previsão final e gráfico (item 5) | 1,0 |
+| Discussão, decisões e uso de IA (itens 6 e 7) | 1,0 |
 
-## Apresentação na sexta (3 pontos)
+## Prévia na sexta (sem nota)
 
-Cada grupo apresenta brevemente o que fez, a turma comenta, e todos saem com
-ideias para o sábado.
+Cada grupo apresenta brevemente uma **prévia** do que fez até ali. **Não vale
+nota** — é um checkpoint para a turma comentar, o monitor dar feedback e todos
+saírem com ideias para o sábado e para a entrega final de 1/jun.
 
-O pitch precisa responder (não diretamente, mas no meio da apresentação):
+Mesmo sendo prévia, vale a pena já tentar responder:
 
 - Qual estratégia de análise adotaram?
 - Que modelo escolheram, e como ele funciona?
 - Qual foi a decisão mais difícil que tomaram?
 - Por que acham que a previsão de vocês é boa?
-
-**Como entra na nota (3 pontos)**:
-
-| Critério | Pontos |
-|---|---|
-| Coesão narrativa, clareza na comunicação, conexão com negócio | 1,0 |
-| Precisão técnica na descrição dos modelos | 1,0 |
-| Capacidade de responder perguntas e defender escolhas | 1,0 |
 
 ## Previsão do grupo (3 pontos)
 
@@ -156,18 +152,20 @@ Se for melhor, ganha mais; se for pior, ganha menos. Vamos ajustar
 a pontuação de forma que o primeiro lugar receba 3 pontos. O último
 lugar pode ficar com um pouco mais de 0, mas não pode ficar negativo.
 
-## Previsão de consenso no sábado (1 ponto)
+## Predição agregada da turma (1 ponto)
 
-Depois de ouvir os pitches da sexta, vocês têm a noite para pensar. No
-sábado, a turma constrói uma **previsão única de consenso** e a submete.
+Depois de ouvir as prévias da sexta, vocês têm a noite para pensar. No
+**sábado (23/mai)**, a turma discute e decide **a melhor forma de construir
+uma predição agregada única**. A predição agregada final é entregue junto
+com o restante do trabalho, em **1/jun**.
 
-**Estrutura (2h)**:
+**Estrutura da discussão de sábado (2h)**:
 
 Após a abertura, iniciamos um debate. Os alunos defendem suas propostas.
-Se ficar difícil de acompanhar as discussões, faremos inscrições para falar. 
-O objetivo é chegar a um consenso sobre qual previsão adotar como a "previsão da turma".
+Se ficar difícil de acompanhar as discussões, faremos inscrições para falar.
+O objetivo é chegar a um consenso sobre como construir a "predição da turma".
 
-**Dica**: A previsão de consenso pode ser:
+**Dica**: A predição agregada pode ser:
 
 - A previsão de um dos grupos que a turma concorda ser a melhor
 - Uma média (simples ou ponderada) das previsões
@@ -176,11 +174,11 @@ O objetivo é chegar a um consenso sobre qual previsão adotar como a "previsão
 
 Não há votação formal: o consenso é construído na discussão.
 
-**Como entra na nota (1 ponto)**: a previsão de consenso é avaliada
+**Como entra na nota (1 ponto)**: a predição agregada é avaliada
 contra os 12 meses ocultados pelo MASE e comparada às previsões
 individuais. **Todos os alunos recebem a mesma pontuação**:
 
-| Posição da previsão de consenso entre as submissões | Pontos para todos |
+| Posição da predição agregada entre as submissões | Pontos para todos |
 |---|---|
 | Entre as 2 melhores | 1,0 |
 | Acima da mediana | 0,5 |
