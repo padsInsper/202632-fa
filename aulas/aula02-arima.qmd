@@ -613,6 +613,124 @@ plt.tight_layout(); plt.show()
 Após o ajuste, inspecione qual modelo foi escolhido (o atributo `arma` retorna `(p, q, P, Q, s, d, D)`). Compare com sua análise visual de ACF/PACF — eles concordam? Se não, investigue por quê. Em séries de taxa de juros, é comum o `AutoARIMA` escolher algo próximo de ARIMA(1,1,1) — alta persistência + quebras estruturais (mudança de regime monetário).
 :::
 
+### Diagnóstico dos resíduos na prática
+
+Ajustar o modelo é metade do trabalho. **Um modelo só é confiável se os resíduos forem ruído branco** — caso contrário, ainda há estrutura na série que o modelo não capturou, e as previsões (e seus intervalos de confiança) estarão erradas. Vamos extrair os resíduos do modelo da Selic e fazer o diagnóstico completo.
+
+#### Passo 1 — Extrair os resíduos
+
+O resíduo é a diferença entre o valor observado e o valor que o modelo previa *um passo à frente* (in-sample): $\hat{\varepsilon}_t = y_t - \hat{y}_{t\mid t-1}$. No `statsforecast`, passamos `fitted=True` e recuperamos os valores ajustados:
+
+```{python}
+#| code-fold: true
+import numpy as np
+
+# Reajusta pedindo os valores in-sample (fitted)
+sf.forecast(df=selic, h=12, fitted=True)
+insample = sf.forecast_fitted_values()
+
+# Resíduo = observado - ajustado (1 passo à frente)
+insample['resid'] = insample['y'] - insample['AutoARIMA']
+resid = insample['resid'].dropna()
+
+# Ordem do modelo escolhido: arma = (p, q, P, Q, s, d, D)
+p, q = fitted.model_['arma'][0], fitted.model_['arma'][1]
+m = p + q  # nº de parâmetros ARMA estimados (entra na correção do Ljung-Box)
+print(f"Modelo: ARIMA(p={p}, d={fitted.model_['arma'][5]}, q={q})  →  m = p+q = {m}")
+print(f"Resíduos: n={len(resid)}, média={resid.mean():.4f}, desvio={resid.std():.4f}")
+```
+
+A **média próxima de zero** é o primeiro sinal positivo: o modelo não tem viés sistemático.
+
+#### Passo 2 — Os quatro gráficos de diagnóstico
+
+O painel padrão (equivalente ao `checkresiduals()` do R) tem quatro vistas. Cada uma testa uma das hipóteses de ruído branco:
+
+```{python}
+#| code-fold: true
+#| fig-cap: "Diagnóstico de resíduos do AutoARIMA na Selic. Se o modelo está correto, os resíduos não devem ter padrão temporal, a ACF deve ficar dentro das bandas, e o histograma/Q-Q devem ser aproximadamente normais."
+import matplotlib.pyplot as plt
+from statsmodels.graphics.tsaplots import plot_acf
+from statsmodels.graphics.gofplots import qqplot
+
+fig, axes = plt.subplots(2, 2, figsize=(13, 8))
+
+# (1) Resíduos no tempo — checa média zero e variância constante
+axes[0, 0].plot(insample['ds'], insample['resid'], color='#5B5B5B', lw=0.8)
+axes[0, 0].axhline(0, color='#E50505', lw=1)
+axes[0, 0].set_title('(1) Resíduos ao longo do tempo')
+axes[0, 0].set_ylabel('resíduo'); axes[0, 0].grid(alpha=0.3)
+
+# (2) ACF dos resíduos — checa ausência de autocorrelação
+plot_acf(resid, lags=24, ax=axes[0, 1], color='#5B5B5B',
+         vlines_kwargs={'colors': '#5B5B5B'})
+axes[0, 1].set_title('(2) ACF dos resíduos')
+
+# (3) Histograma + densidade normal — checa normalidade
+axes[1, 0].hist(resid, bins=30, density=True, color='#5B5B5B',
+                alpha=0.6, edgecolor='white')
+x = np.linspace(resid.min(), resid.max(), 200)
+axes[1, 0].plot(x, (1/(resid.std()*np.sqrt(2*np.pi))) *
+                np.exp(-0.5*((x-resid.mean())/resid.std())**2),
+                color='#E50505', lw=2, label='Normal teórica')
+axes[1, 0].set_title('(3) Distribuição dos resíduos')
+axes[1, 0].legend(); axes[1, 0].grid(alpha=0.3)
+
+# (4) Q-Q plot — checa normalidade nas caudas
+qqplot(resid, line='s', ax=axes[1, 1], markerfacecolor='#5B5B5B',
+       markeredgecolor='#5B5B5B', alpha=0.5)
+axes[1, 1].get_lines()[1].set_color('#E50505')
+axes[1, 1].set_title('(4) Q-Q plot (normalidade)')
+
+plt.tight_layout(); plt.show()
+```
+
+**Como ler cada painel:**
+
+| Painel | Hipótese testada | Sinal de problema |
+|--------|------------------|-------------------|
+| (1) Resíduos no tempo | média zero, variância constante | tendência, "funil" (variância crescente), aglomeração de volatilidade |
+| (2) ACF dos resíduos | sem autocorrelação | qualquer pico fora das bandas azuis (sobretudo nos primeiros lags ou nos lags sazonais) |
+| (3) Histograma | normalidade | forte assimetria, bimodalidade |
+| (4) Q-Q plot | normalidade nas caudas | pontos fugindo da reta vermelha nas pontas (caudas pesadas) |
+
+#### Passo 3 — Teste formal de Ljung-Box
+
+O olho humano é ruim para julgar "essa autocorrelação é grande o suficiente?". O **teste de Ljung-Box** formaliza isso, testando *conjuntamente* várias autocorrelações de uma vez. Lembre da correção de graus de liberdade: como estimamos $m = p+q$ parâmetros, informamos `model_df=m` para o teste usar $\chi^2_{h-m}$:
+
+```{python}
+#| code-fold: true
+from statsmodels.stats.diagnostic import acorr_ljungbox
+
+lb = acorr_ljungbox(resid, lags=[10, 15, 20], model_df=m)
+lb.index.name = 'lag (h)'
+print(lb.round(4))
+
+alpha = 0.05
+if (lb['lb_pvalue'] > alpha).all():
+    print(f"\n✓ Todos os p-valores > {alpha}: NÃO rejeitamos H0.")
+    print("  Os resíduos são compatíveis com ruído branco — modelo aprovado.")
+else:
+    print(f"\n✗ Algum p-valor < {alpha}: rejeitamos H0.")
+    print("  Há autocorrelação remanescente — volte à etapa de identificação.")
+```
+
+::: {.callout-important}
+## Como interpretar o resultado
+
+- **$H_0$: os resíduos são ruído branco** (sem autocorrelação).
+- **p-valor alto (> 0,05)** → *não* rejeitamos $H_0$ → o modelo "limpou" a estrutura da série. **Esse é o resultado que queremos.**
+- **p-valor baixo (< 0,05)** → rejeitamos $H_0$ → ainda há autocorrelação. O modelo está mal especificado: volte à Etapa 1, olhe a ACF dos resíduos (painel 2) para ver *onde* estão os picos e teste ordens alternativas (ex.: aumentar $p$ ou $q$, ou incluir termos sazonais → SARIMA).
+
+Note a aparente inversão da lógica usual de testes: aqui um p-valor **alto** é a *boa* notícia, porque a hipótese nula é exatamente o que desejamos (resíduos sem estrutura).
+:::
+
+::: {.callout-warning}
+## Normalidade é desejável, não obrigatória
+
+A estimação por máxima verossimilhança e os **intervalos de previsão** assumem resíduos normais. Se o Q-Q plot mostra caudas pesadas (comum em séries financeiras), as previsões pontuais continuam válidas, mas os **intervalos de confiança ficam subestimados** — eles serão mais estreitos do que deveriam. Já a **autocorrelação remanescente (Ljung-Box)** é um problema grave: invalida tanto as previsões quanto os intervalos. Priorize sempre, nesta ordem: (1) sem autocorrelação, (2) variância constante, (3) normalidade.
+:::
+
 ## ARIMAX: Quando Há Variáveis Externas
 
 Muitas vezes a previsão melhora ao incluir **variáveis exógenas** (exógenas = determinadas fora do modelo): um preço pode depender do dólar, as vendas de uma loja podem depender de campanhas de marketing, o consumo de energia da temperatura. Dois caminhos possíveis:
