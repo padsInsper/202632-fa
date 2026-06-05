@@ -1,5 +1,7 @@
 _site/
 .quarto/
+.playwright-mcp/
+.jupyter_kernels/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

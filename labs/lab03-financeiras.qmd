@@ -1,76 +1,116 @@
 ---
 title: "Lab 3: Séries Financeiras, GARCH e Portfólios"
-subtitle: "Pipeline completo: fatos estilizados, volatilidade e otimização de carteira"
+subtitle: "Fundos imobiliários: fatos estilizados, volatilidade, fronteira, VaR e CAPM"
+jupyter: pyvenv
 ---
 
 ::: {.objetivos}
 #### Objetivos do Lab
 
-- [Aplicar]{.bloom-badge .bloom-aplicar} download e tratamento de dados financeiros com `yfinance`
-- [Analisar]{.bloom-badge .bloom-analisar} fatos estilizados em ativos brasileiros
-- [Criar]{.bloom-badge .bloom-criar} modelos GARCH e portfólios otimizados
-- [Avaliar]{.bloom-badge .bloom-avaliar} performance via backtest contra benchmark
+- [Aplicar]{.bloom-badge .bloom-aplicar} download e tratamento de séries financeiras com `yfinance`
+- [Analisar]{.bloom-badge .bloom-analisar} fatos estilizados em fundos imobiliários brasileiros
+- [Criar]{.bloom-badge .bloom-criar} modelos GARCH e portfólios pela fronteira eficiente
+- [Avaliar]{.bloom-badge .bloom-avaliar} risco e exposição via VaR e betas (CAPM)
 :::
 
 ::: {.callout-tip}
 ## Estrutura do Lab
 
-O Lab 3 é dividido em dois blocos complementares sobre o **mesmo pool de ativos**, para você sair com o pipeline end-to-end de séries financeiras.
+Trabalhamos com o **mesmo pool de ativos** do começo ao fim, num pipeline end-to-end de
+séries financeiras. São dois blocos complementares:
 
-- **Bloco 3.1** — Séries financeiras e GARCH. Preços → log-retornos → fatos estilizados → modelos GARCH → previsão de volatilidade.
-- **Bloco 3.2** — Portfólios. Retorno/risco por ativo → matriz de covariância → fronteira eficiente → backtest contra o Ibovespa.
+- **Bloco 3.1:** séries financeiras e GARCH. Preços, log-retornos, fatos estilizados,
+  grid de modelos GARCH, previsão de volatilidade.
+- **Bloco 3.2:** portfólio. Retorno e risco por ativo, fronteira eficiente por Monte
+  Carlo (mínima variância e máximo Sharpe), VaR via t de Student e betas/CAPM contra o
+  Ibovespa.
+:::
+
+::: {.callout-note collapse="true"}
+## Por que fundos imobiliários?
+
+O pool são quatro FIIs que o monitor já teve na carteira (`HGRE11`, `BTLG11`, `HGRU11`,
+`VGIR11`). A pergunta de negócio é honesta: foi um **péssimo** investimento ou apenas
+**ruim**? FIIs costumam ter beta baixo contra o Ibovespa, então a parte de CAPM rende
+boa discussão. Quem quiser a versão com blue-chips e a fronteira resolvida por
+otimização tem a [versão alternativa do Lab 3](lab03-financeiras-alternativo.qmd), e quem
+preferir R tem o [espelho em R](lab03-financeiras-r.qmd) com `rugarch` e `yfR`.
 :::
 
 ## Setup compartilhado
 
 ```{python}
-import yfinance as yf
-import pandas as pd
+import requests
+
+# yfinance às vezes é bloqueado sem um User-Agent de navegador.
+# Truque clássico: forçar um header global em todas as requisições.
+_old_request = requests.Session.request
+
+def _new_request(self, method, url, *args, **kwargs):
+    headers = kwargs.get("headers", {}) or {}
+    headers.setdefault(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    )
+    kwargs["headers"] = headers
+    return _old_request(self, method, url, *args, **kwargs)
+
+requests.Session.request = _new_request
+```
+
+```{python}
+import itertools
+import warnings
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+import yfinance as yf
 from arch import arch_model
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+import statsmodels.api as sm
 from scipy import stats
-from scipy.optimize import minimize
 
-import warnings
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 plt.rcParams.update({
-    'figure.figsize': (12, 5),
-    'axes.spines.top': False,
-    'axes.spines.right': False,
-    'font.size': 12,
+    "figure.figsize": (12, 5),
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "font.size": 12,
 })
 
-INSPER_RED = '#E50505'
-INSPER_TURQUESA = '#3ACC9F'
-INSPER_AMARELO = '#FFCC00'
-INSPER_ROXO = '#730D9F'
-INSPER_GRAY = '#5B5B5B'
+INSPER_RED = "#E50505"
+INSPER_TURQUESA = "#3ACC9F"
+INSPER_AMARELO = "#FFCC00"
+INSPER_ROXO = "#730D9F"
+INSPER_GRAY = "#5B5B5B"
 ```
 
 ```{python}
-# Pool de ativos compartilhado entre 3.1 e 3.2
-ativos = ['PETR4.SA', 'VALE3.SA', 'ITUB4.SA', 'WEGE3.SA',
-          'ABEV3.SA', 'RENT3.SA', 'BBAS3.SA', 'SUZB3.SA']
-benchmark = '^BVSP'
+# Pool de ativos: fundos imobiliários. O Ibovespa entra só como benchmark do CAPM.
+ativos = ["HGRE11.SA", "BTLG11.SA", "HGRU11.SA", "VGIR11.SA"]
+benchmark = "^BVSP"
 nomes = {
-    'PETR4.SA': 'Petrobras', 'VALE3.SA': 'Vale', 'ITUB4.SA': 'Itaú',
-    'WEGE3.SA': 'WEG', 'ABEV3.SA': 'Ambev', 'RENT3.SA': 'Localiza',
-    'BBAS3.SA': 'BB', 'SUZB3.SA': 'Suzano', '^BVSP': 'Ibovespa',
+    "HGRE11.SA": "CSHG Real Estate", "BTLG11.SA": "BTG Logística",
+    "HGRU11.SA": "CSHG Urbano", "VGIR11.SA": "Valora CRI", "^BVSP": "Ibovespa",
 }
-start_date = '2018-01-01'
+start_date = "2018-01-01"
 
 todos = ativos + [benchmark]
-precos = yf.download(todos, start=start_date, auto_adjust=False, progress=False)['Adj Close'].dropna()
+precos = yf.download(todos, start=start_date, auto_adjust=False, progress=False)["Adj Close"]
+
+# Data mínima comum a todas as séries (alguns FIIs listaram depois de 2018).
+data_corte = precos[ativos].dropna().index.min()
+precos = precos.loc[data_corte:]
 
 bench_precos = precos[benchmark]
-precos = precos[ativos]
+precos = precos[ativos].dropna()
 
 retornos = np.log(precos / precos.shift(1)).dropna()
 ret_bench = np.log(bench_precos / bench_precos.shift(1)).dropna()
@@ -80,7 +120,7 @@ print(f"Observações: {len(precos)} dias úteis")
 precos.head()
 ```
 
-# Bloco 3.1 — Séries Financeiras e GARCH
+# Bloco 3.1: Séries Financeiras e GARCH
 
 ## Parte 1: Preços e log-retornos
 
@@ -89,26 +129,26 @@ precos_norm = (precos / precos.iloc[0]) * 100
 
 fig = px.line(
     precos_norm, y=precos_norm.columns,
-    title='Preços Normalizados (Base 100)',
-    labels={'value': 'Índice', 'variable': 'Ativo'},
-    template='plotly_white'
+    title="Preços Normalizados (Base 100)",
+    labels={"value": "Índice", "variable": "Ativo"},
+    template="plotly_white",
 )
-fig.update_layout(font_family='Inter', hovermode='x unified')
+fig.update_layout(font_family="Inter", hovermode="x unified")
 fig.show()
 ```
 
 ```{python}
 desc = retornos.describe().T
-desc['skewness'] = retornos.skew()
-desc['kurtosis'] = retornos.kurtosis()
-desc['jarque_bera_p'] = [stats.jarque_bera(retornos[col])[1] for col in retornos.columns]
+desc["skewness"] = retornos.skew()
+desc["kurtosis"] = retornos.kurtosis()
+desc["jarque_bera_p"] = [stats.jarque_bera(retornos[col])[1] for col in retornos.columns]
 
-desc[['mean', 'std', 'skewness', 'kurtosis', 'jarque_bera_p']].round(4)
+desc[["mean", "std", "skewness", "kurtosis", "jarque_bera_p"]].round(4)
 ```
 
 ::: {.callout-note}
 ## Interprete a Tabela
-- **Curtose > 0**: caudas mais pesadas que a normal (esperado!)
+- **Curtose > 0**: caudas mais pesadas que a normal (esperado em ativos financeiros)
 - **Assimetria < 0**: cauda esquerda mais pesada (quedas mais extremas)
 - **Jarque-Bera p < 0.05**: rejeita normalidade
 :::
@@ -118,17 +158,17 @@ desc[['mean', 'std', 'skewness', 'kurtosis', 'jarque_bera_p']].round(4)
 ### Caudas pesadas
 
 ```{python}
-ativo_foco = 'PETR4.SA'
+ativo_foco = "HGRE11.SA"
 ret = retornos[ativo_foco].values
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
 stats.probplot(ret, dist="norm", plot=axes[0])
-axes[0].set_title(f'{nomes[ativo_foco]} — QQ-Plot Normal', fontweight='bold')
+axes[0].set_title(f"{nomes[ativo_foco]}: QQ-Plot Normal", fontweight="bold")
 axes[0].get_lines()[0].set_color(INSPER_RED)
 
-stats.probplot(ret, dist="t", sparams=(4,), plot=axes[1])
-axes[1].set_title(f'{nomes[ativo_foco]} — QQ-Plot t-Student (df=4)', fontweight='bold')
+stats.probplot(ret, dist="t", sparams=(3,), plot=axes[1])
+axes[1].set_title(f"{nomes[ativo_foco]}: QQ-Plot t-Student (df=3)", fontweight="bold")
 axes[1].get_lines()[0].set_color(INSPER_TURQUESA)
 
 plt.tight_layout()
@@ -140,14 +180,14 @@ plt.show()
 ```{python}
 fig, axes = plt.subplots(2, 2, figsize=(14, 8))
 
-plot_acf(retornos[ativo_foco].dropna(), ax=axes[0,0], lags=40, zero=False,
-         title=f'ACF — Retornos {nomes[ativo_foco]}')
-plot_acf(retornos[ativo_foco].dropna()**2, ax=axes[0,1], lags=40, zero=False,
-         title=f'ACF — Retornos² {nomes[ativo_foco]}')
-plot_pacf(retornos[ativo_foco].dropna(), ax=axes[1,0], lags=40, zero=False,
-          title='PACF — Retornos')
-plot_pacf(retornos[ativo_foco].dropna()**2, ax=axes[1,1], lags=40, zero=False,
-          title='PACF — Retornos²')
+plot_acf(retornos[ativo_foco].dropna(), ax=axes[0, 0], lags=40, zero=False,
+         title=f"ACF: Retornos {nomes[ativo_foco]}")
+plot_acf(retornos[ativo_foco].dropna() ** 2, ax=axes[0, 1], lags=40, zero=False,
+         title=f"ACF: Retornos² {nomes[ativo_foco]}")
+plot_pacf(retornos[ativo_foco].dropna(), ax=axes[1, 0], lags=40, zero=False,
+          title="PACF: Retornos")
+plot_pacf(retornos[ativo_foco].dropna() ** 2, ax=axes[1, 1], lags=40, zero=False,
+          title="PACF: Retornos²")
 
 plt.tight_layout()
 plt.show()
@@ -156,18 +196,32 @@ plt.show()
 ::: {.callout-caution collapse="true"}
 ## Exercício: Interpretação
 
-1. **Os retornos têm autocorrelação significativa? E os retornos ao quadrado?** Os retornos simples geralmente não têm autocorrelação significativa (mercado eficiente). Mas os retornos ao quadrado têm autocorrelação forte e persistente — isso indica clusters de volatilidade.
-2. **O que a ACF dos retornos ao quadrado está nos dizendo?** Que a **variância** (volatilidade) muda ao longo do tempo de forma previsível. Períodos de alta volatilidade tendem a ser seguidos por mais alta volatilidade.
-3. **O QQ-Plot com distribuição t se ajusta melhor?** Sim — a t com graus de liberdade baixos (4–8) se ajusta melhor às caudas dos retornos financeiros.
+1. **Os retornos têm autocorrelação significativa? E os retornos ao quadrado?** Os
+   retornos simples geralmente não têm autocorrelação significativa (mercado eficiente).
+   Mas os retornos ao quadrado têm autocorrelação forte e persistente: é o sinal de
+   clusters de volatilidade.
+2. **O que a ACF dos retornos ao quadrado está nos dizendo?** Que a **variância**
+   (volatilidade) muda ao longo do tempo de forma previsível. Períodos de alta
+   volatilidade tendem a ser seguidos por mais alta volatilidade.
+3. **O QQ-Plot com distribuição t se ajusta melhor?** Sim, a t com poucos graus de
+   liberdade (3 a 8) se ajusta melhor às caudas dos retornos financeiros.
 :::
 
 ## Parte 3: Modelos GARCH
 
-```{python}
-ret_pct = retornos[ativo_foco] * 100  # `arch` trabalha em retornos percentuais
+Começamos ajustando um GARCH(1,1) com distribuição t num único ativo. A convenção do
+pacote `arch` é trabalhar em **retornos percentuais**, então multiplicamos por 100.
 
-modelo_garch = arch_model(ret_pct, vol='Garch', p=1, q=1, dist='t')
-resultado_garch = modelo_garch.fit(disp='off')
+```{python}
+def garch_individual(serie, p=1, q=1, dist="t"):
+    """Ajusta um GARCH(p, q). Retorna None se não convergir."""
+    modelo = arch_model(serie * 100, vol="Garch", p=p, q=q, dist=dist)
+    try:
+        return modelo.fit(disp="off")
+    except Exception:
+        return None
+
+resultado_garch = garch_individual(retornos[ativo_foco], p=1, q=1, dist="t")
 print(resultado_garch.summary())
 ```
 
@@ -175,259 +229,315 @@ print(resultado_garch.summary())
 vol_condicional = resultado_garch.conditional_volatility / 100
 
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                    subplot_titles=[f'Retornos — {nomes[ativo_foco]}',
-                                    'Volatilidade Condicional (GARCH)'])
+                    subplot_titles=[f"Retornos: {nomes[ativo_foco]}",
+                                    "Volatilidade Condicional (GARCH)"])
 fig.add_trace(go.Scatter(x=retornos.index, y=retornos[ativo_foco],
-                         mode='lines', line=dict(color=INSPER_GRAY, width=0.5),
-                         name='Retornos'), row=1, col=1)
+                         mode="lines", line=dict(color=INSPER_GRAY, width=0.5),
+                         name="Retornos"), row=1, col=1)
 fig.add_trace(go.Scatter(x=retornos.index, y=vol_condicional,
-                         mode='lines', line=dict(color=INSPER_RED, width=1),
-                         name='Volatilidade GARCH'), row=2, col=1)
-fig.update_layout(height=600, template='plotly_white', font_family='Inter',
+                         mode="lines", line=dict(color=INSPER_RED, width=1),
+                         name="Volatilidade GARCH"), row=2, col=1)
+fig.update_layout(height=600, template="plotly_white", font_family="Inter",
                   showlegend=False)
 fig.show()
 ```
 
-### Comparando variantes
+### Um grid de modelos por ativo
+
+Em vez de chutar `(p, q)` e a distribuição, varremos uma pequena grade e escolhemos pelo
+menor **AIC**. É o equivalente em Python da função `melhor_garch` do material em R.
 
 ```{python}
-modelos = {
-    'GARCH(1,1)':     {'vol': 'Garch',  'p': 1, 'q': 1},
-    'GARCH(2,1)':     {'vol': 'Garch',  'p': 2, 'q': 1},
-    'EGARCH(1,1)':    {'vol': 'EGARCH', 'p': 1, 'q': 1},
-    'GJR-GARCH(1,1)': {'vol': 'Garch',  'p': 1, 'o': 1, 'q': 1},
-}
+def grid_garch(serie, ps=(1, 2), qs=(1, 2), dists=("normal", "t", "skewt")):
+    """Varre (p, q, dist) e devolve a tabela ordenada por AIC."""
+    linhas = []
+    for p, q, dist in itertools.product(ps, qs, dists):
+        fit = garch_individual(serie, p=p, q=q, dist=dist)
+        if fit is not None:
+            linhas.append({"p": p, "q": q, "dist": dist,
+                           "AIC": fit.aic, "BIC": fit.bic,
+                           "LogLik": fit.loglikelihood})
+    return pd.DataFrame(linhas).sort_values("AIC").reset_index(drop=True)
 
-resultados = {}
-for nome, params in modelos.items():
-    try:
-        fit = arch_model(ret_pct, dist='t', **params).fit(disp='off')
-        resultados[nome] = {'AIC': fit.aic, 'BIC': fit.bic, 'Log-Lik': fit.loglikelihood}
-    except Exception as e:
-        print(f"Erro em {nome}: {e}")
+# Exemplo para um ativo
+grid_garch(retornos[ativo_foco]).round(1).head(6)
+```
 
-pd.DataFrame(resultados).T.sort_values('AIC').round(2)
+```{python}
+# Melhor modelo por ativo (linha de menor AIC)
+melhores_por_ativo = {}
+for ativo in ativos:
+    melhor = grid_garch(retornos[ativo]).iloc[0]
+    melhores_por_ativo[ativo] = melhor
+
+tab_melhores = pd.DataFrame(melhores_por_ativo).T
+tab_melhores.index = [nomes[a] for a in ativos]
+tab_melhores[["p", "q", "dist", "AIC", "BIC"]].round(1)
 ```
 
 ### Previsão de volatilidade
 
-```{python}
-h = 10
-forecast = resultado_garch.forecast(horizon=h, reindex=False)
-vol_futura = np.sqrt(forecast.variance.values[-1, :]) / 100
+Para cada ativo reajustamos o modelo escolhido e projetamos a volatilidade alguns passos
+à frente. Guardamos também o `nu` (graus de liberdade da t), que vamos reusar no VaR.
 
-fig, ax = plt.subplots(figsize=(10, 4))
-hist_vol = vol_condicional[-60:]
-ax.plot(range(len(hist_vol)), hist_vol.values, color=INSPER_GRAY, label='Histórico')
-ax.plot(range(len(hist_vol), len(hist_vol) + h), vol_futura,
-        color=INSPER_RED, linewidth=2, marker='o', label='Previsão GARCH')
-ax.axhline(y=vol_condicional.mean(), color=INSPER_TURQUESA,
-           linestyle='--', label='Média histórica', alpha=0.7)
-ax.set_title(f'Previsão de Volatilidade — {nomes[ativo_foco]}', fontweight='bold')
-ax.set_xlabel('Dias'); ax.set_ylabel('Volatilidade'); ax.legend()
-plt.tight_layout()
-plt.show()
+```{python}
+def prever_volatilidade(ativo, params, n_steps=5):
+    serie = retornos[ativo]
+    fit = arch_model(serie * 100, vol="Garch",
+                     p=int(params["p"]), q=int(params["q"]),
+                     dist=params["dist"]).fit(disp="off")
+    fc = fit.forecast(horizon=n_steps, reindex=False)
+    sigma = np.sqrt(fc.variance.values[-1, :]) / 100
+    serie_prev = fc.mean.values[-1, :] / 100
+    shape = float(fit.params.get("nu", np.nan))
+    return pd.DataFrame({
+        "ticker": ativo,
+        "passo": np.arange(1, n_steps + 1),
+        "serie": serie_prev,
+        "volatilidade": sigma,
+        "shape": shape,
+    })
+
+vol_futuro = pd.concat(
+    [prever_volatilidade(a, melhores_por_ativo[a]) for a in ativos],
+    ignore_index=True,
+)
+vol_futuro.round(4).head(8)
 ```
 
-# Bloco 3.2 — Portfólios
+```{python}
+# Volatilidade prevista no primeiro passo, por ativo
+vol_1passo = (vol_futuro[vol_futuro["passo"] == 1]
+              .set_index("ticker")["volatilidade"]
+              .rename("Vol. prevista (1 passo)"))
+vol_1passo.index = [nomes[a] for a in vol_1passo.index]
+vol_1passo.to_frame().style.format("{:.4f}")
+```
 
-## Parte 4: Retorno, risco e correlação
+::: {.callout-caution collapse="true"}
+## Exercício: comparar as volatilidades
+
+Olhe a volatilidade prevista de cada FII e relacione com a natureza do fundo. FIIs de
+**tijolo** (lajes corporativas, galpões logísticos) costumam oscilar mais que FIIs de
+**papel** (CRIs). O que os números dizem? Bate com a sua intuição sobre cada negócio?
+:::
+
+# Bloco 3.2: Portfólio
+
+## Parte 4: Retorno, risco e fronteira eficiente
+
+Seguimos a receita clássica do [codingfinance](https://www.codingfinance.com/post/2018-05-31-portfolio-opt-in-python/):
+retorno médio por ativo, matriz de covariância (em escala diária, sem anualizar) e
+milhares de carteiras aleatórias para desenhar a fronteira.
 
 ```{python}
-ret_anual = retornos.mean() * 252
-risco_anual = retornos.std() * np.sqrt(252)
+mean_ret = retornos.mean().values
+cov_mat = retornos.cov().values
 
 resumo = pd.DataFrame({
-    'Retorno Anual (%)': ret_anual * 100,
-    'Risco Anual (%)':   risco_anual * 100,
-    'Sharpe':            ret_anual / risco_anual,
-}).round(3)
-resumo.sort_values('Sharpe', ascending=False)
-```
-
-```{python}
-fig = px.scatter(
-    resumo, x='Risco Anual (%)', y='Retorno Anual (%)',
-    text=resumo.index.str.replace('.SA', ''),
-    title='Retorno vs. Risco — Ativos Individuais',
-    template='plotly_white'
-)
-fig.update_traces(textposition='top center', marker=dict(size=12, color=INSPER_RED))
-fig.update_layout(font_family='Inter')
-fig.show()
+    "Retorno médio diário (%)": mean_ret * 100,
+    "Risco diário (%)": retornos.std().values * 100,
+}, index=[nomes[a] for a in ativos]).round(4)
+resumo
 ```
 
 ```{python}
 corr = retornos.corr()
 fig = px.imshow(
-    corr, text_auto='.2f',
-    color_continuous_scale=['#3ACC9F', '#FFFFFF', '#E50505'],
-    title='Matriz de Correlação', template='plotly_white'
+    corr, text_auto=".2f",
+    color_continuous_scale=["#3ACC9F", "#FFFFFF", "#E50505"],
+    title="Matriz de Correlação", template="plotly_white",
 )
-fig.update_layout(font_family='Inter')
+fig.update_layout(font_family="Inter")
 fig.show()
 ```
 
-## Parte 5: Fronteira eficiente
+Antes do loop, vale ver os cálculos para **uma** carteira aleatória: pesos, retorno,
+risco e Sharpe.
 
 ```{python}
+rng = np.random.default_rng(2)
 n_ativos = len(ativos)
-mu = ret_anual.values
-sigma = (retornos.cov() * 252).values
 
-def portfolio_stats(weights, mu, sigma):
-    ret = weights @ mu
-    risk = np.sqrt(weights @ sigma @ weights)
-    return ret, risk
+wts = rng.random(n_ativos)
+wts = wts / wts.sum()
 
-def neg_sharpe(weights, mu, sigma, rf=0.10):
-    ret, risk = portfolio_stats(weights, mu, sigma)
-    return -(ret - rf) / risk
+port_ret = np.sum(wts * mean_ret)
+port_risk = np.sqrt(wts @ cov_mat @ wts)
+sharpe = port_ret / port_risk
 
-def portfolio_variance(weights, sigma):
-    return weights @ sigma @ weights
+print("Pesos:", dict(zip(ativos, wts.round(3))))
+print(f"Retorno: {port_ret:.5f} | Risco: {port_risk:.5f} | Sharpe: {sharpe:.3f}")
+```
 
-constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
-bounds = [(0, 0.30)] * n_ativos
+Agora rodamos o mesmo cálculo em 5000 carteiras aleatórias. As de menor risco e maior
+Sharpe são a **mínima variância** e a **carteira de tangência**.
 
-w0 = np.ones(n_ativos) / n_ativos
-res_minvar = minimize(portfolio_variance, w0, args=(sigma,),
-                      method='SLSQP', bounds=bounds, constraints=constraints)
-res_sharpe = minimize(neg_sharpe, w0, args=(mu, sigma, 0.10),
-                      method='SLSQP', bounds=bounds, constraints=constraints)
+```{python}
+n_port = 5000
+W = rng.dirichlet(np.ones(n_ativos), n_port)
+rets = W @ mean_ret
+risks = np.sqrt(np.einsum("ij,jk,ik->i", W, cov_mat, W))
+sharpes = rets / risks
 
-print("Portfólio Mínima Variância:")
-for ativo, peso in zip(ativos, res_minvar.x):
-    if peso > 0.01:
-        print(f"  {ativo}: {peso:.1%}")
+i_minvar = int(np.argmin(risks))
+i_maxsr = int(np.argmax(sharpes))
 
-print("\nPortfólio Máximo Sharpe:")
-for ativo, peso in zip(ativos, res_sharpe.x):
-    if peso > 0.01:
-        print(f"  {ativo}: {peso:.1%}")
+pesos_minvar = W[i_minvar]
+pesos_maxsr = W[i_maxsr]
+
+print("Mínima variância:", dict(zip(ativos, pesos_minvar.round(3))))
+print("Máximo Sharpe   :", dict(zip(ativos, pesos_maxsr.round(3))))
 ```
 
 ```{python}
-n_portfolios = 100
-retornos_alvo = np.linspace(mu.min(), mu.max(), n_portfolios)
-riscos_fronteira = []
-
-for ret_alvo in retornos_alvo:
-    cons = [
-        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
-        {'type': 'eq', 'fun': lambda w, r=ret_alvo: w @ mu - r},
-    ]
-    res = minimize(portfolio_variance, w0, args=(sigma,),
-                   method='SLSQP', bounds=bounds, constraints=cons)
-    riscos_fronteira.append(np.sqrt(res.fun) if res.success else np.nan)
-
-rng = np.random.default_rng(42)
-n_random = 5000
-ret_random, risk_random = [], []
-for _ in range(n_random):
-    w = rng.dirichlet(np.ones(n_ativos))
-    r, s = portfolio_stats(w, mu, sigma)
-    ret_random.append(r); risk_random.append(s)
-
-r_mv, s_mv = portfolio_stats(res_minvar.x, mu, sigma)
-r_ms, s_ms = portfolio_stats(res_sharpe.x, mu, sigma)
-
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=np.array(risk_random)*100, y=np.array(ret_random)*100,
-                         mode='markers', marker=dict(size=2, color=INSPER_GRAY, opacity=0.3),
-                         name='Portfólios aleatórios'))
-fig.add_trace(go.Scatter(x=np.array(riscos_fronteira)*100, y=retornos_alvo*100,
-                         mode='lines', line=dict(color=INSPER_RED, width=3),
-                         name='Fronteira eficiente'))
-fig.add_trace(go.Scatter(x=[s_mv*100], y=[r_mv*100], mode='markers',
-                         marker=dict(size=15, color=INSPER_TURQUESA, symbol='star'),
-                         name='Mín. Variância'))
-fig.add_trace(go.Scatter(x=[s_ms*100], y=[r_ms*100], mode='markers',
-                         marker=dict(size=15, color=INSPER_AMARELO, symbol='star'),
-                         name='Máx. Sharpe'))
-fig.add_trace(go.Scatter(x=risco_anual.values*100, y=ret_anual.values*100,
-                         mode='markers+text',
-                         text=[a.replace('.SA', '') for a in ativos],
-                         textposition='top center',
-                         marker=dict(size=10, color=INSPER_ROXO),
-                         name='Ativos individuais'))
-fig.update_layout(title='Fronteira Eficiente de Markowitz',
-                  xaxis_title='Risco Anual (%)', yaxis_title='Retorno Anual (%)',
-                  template='plotly_white', font_family='Inter',
-                  legend=dict(yanchor='top', y=0.99, xanchor='left', x=0.01))
-fig.show()
-```
-
-## Parte 6: Backtest contra o Ibovespa
-
-```{python}
-split_date = '2024-01-01'
-ret_treino = retornos.loc[:split_date]
-ret_teste  = retornos.loc[split_date:]
-
-mu_train    = ret_treino.mean().values * 252
-sigma_train = ret_treino.cov().values * 252
-
-res_bt = minimize(neg_sharpe, w0, args=(mu_train, sigma_train, 0.10),
-                  method='SLSQP', bounds=bounds, constraints=constraints)
-pesos_otimos = res_bt.x
-
-ret_portfolio_teste = (ret_teste * pesos_otimos).sum(axis=1)
-ret_bench_teste = ret_bench.loc[split_date:]
-
-idx_comum = ret_portfolio_teste.index.intersection(ret_bench_teste.index)
-ret_portfolio_teste = ret_portfolio_teste.loc[idx_comum]
-ret_bench_teste = ret_bench_teste.loc[idx_comum]
-
-cum_portfolio = (1 + ret_portfolio_teste).cumprod()
-cum_bench = (1 + ret_bench_teste).cumprod()
-
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=cum_portfolio.index, y=cum_portfolio.values,
-                         mode='lines', name='Portfólio Ótimo',
-                         line=dict(color=INSPER_RED, width=2)))
-fig.add_trace(go.Scatter(x=cum_bench.index, y=cum_bench.values,
-                         mode='lines', name='Ibovespa',
-                         line=dict(color=INSPER_GRAY, width=2)))
-fig.update_layout(title='Backtest: Portfólio Otimizado vs. Ibovespa',
-                  template='plotly_white', font_family='Inter',
-                  yaxis_title='Retorno Acumulado', hovermode='x unified')
+fig.add_trace(go.Scatter(
+    x=risks * 100, y=rets * 100, mode="markers",
+    marker=dict(size=4, color=sharpes, colorscale="Viridis", showscale=True,
+                colorbar=dict(title="Sharpe"), opacity=0.6),
+    name="Carteiras"))
+fig.add_trace(go.Scatter(
+    x=[risks[i_minvar] * 100], y=[rets[i_minvar] * 100], mode="markers",
+    marker=dict(size=16, color=INSPER_TURQUESA, symbol="star"),
+    name="Mín. variância"))
+fig.add_trace(go.Scatter(
+    x=[risks[i_maxsr] * 100], y=[rets[i_maxsr] * 100], mode="markers",
+    marker=dict(size=16, color=INSPER_RED, symbol="star"),
+    name="Máx. Sharpe (tangência)"))
+fig.update_layout(
+    title="Fronteira Eficiente por Monte Carlo (5000 carteiras)",
+    xaxis_title="Risco diário (%)", yaxis_title="Retorno diário (%)",
+    template="plotly_white", font_family="Inter",
+    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
 fig.show()
 ```
 
 ```{python}
-def performance_metrics(returns, rf_anual=0.10):
-    ret_anual = returns.mean() * 252
-    vol_anual = returns.std() * np.sqrt(252)
-    sharpe = (ret_anual - rf_anual) / vol_anual
-    cum = (1 + returns).cumprod()
-    peak = cum.cummax()
-    drawdown = (cum - peak) / peak
-    max_dd = drawdown.min()
-    return {
-        'Retorno Anual (%)': f"{ret_anual*100:.2f}",
-        'Volatilidade (%)':  f"{vol_anual*100:.2f}",
-        'Sharpe':            f"{sharpe:.3f}",
-        'Max Drawdown (%)':  f"{max_dd*100:.2f}",
-    }
+pesos_df = pd.DataFrame({
+    "Mínima variância": pesos_minvar,
+    "Máximo Sharpe": pesos_maxsr,
+}, index=[nomes[a] for a in ativos])
 
-pd.DataFrame({
-    'Portfólio': performance_metrics(ret_portfolio_teste),
-    'Ibovespa':  performance_metrics(ret_bench_teste),
-})
+fig = px.bar(pesos_df, barmode="group", template="plotly_white",
+             title="Pesos das carteiras ótimas",
+             labels={"value": "Peso", "index": "Ativo", "variable": "Carteira"},
+             color_discrete_sequence=[INSPER_TURQUESA, INSPER_RED])
+fig.update_layout(font_family="Inter", yaxis_tickformat=".0%")
+fig.show()
 ```
 
-## Exercício final — Competição de portfólios
+## Parte 5: VaR do portfólio
+
+Usamos a carteira de **mínima variância** e o `nu` (graus de liberdade) mais conservador
+estimado pelos GARCHs. O VaR sai de um quantil da t de Student, reescalando pela variância
+finita da distribuição.
+
+```{python}
+pesos_finais = pesos_minvar
+
+rt_final = np.sum(vol_futuro.groupby("ticker")["serie"].first().reindex(ativos).values * pesos_finais)
+sd_final = np.sqrt(pesos_finais @ cov_mat @ pesos_finais)
+
+nu = float(vol_futuro["shape"].min())
+valor_t = stats.t.ppf(0.95, nu)
+VaR = rt_final + valor_t * sd_final / np.sqrt(nu / (nu - 2))
+
+print(f"Retorno esperado da carteira (1 passo): {rt_final:.5f}")
+print(f"Desvio-padrão da carteira: {sd_final:.5f}")
+print(f"Graus de liberdade (nu) usados: {nu:.2f}")
+print(f"VaR (95%): {VaR:.5f}  ->  {VaR * 100:.2f}% por dia")
+```
+
+::: {.callout-note}
+## Como ler esse VaR
+
+O VaR resume, num número só, "qual é uma perda plausível num dia ruim". Aqui ele usa a
+cauda da t de Student (graus de liberdade baixos = caudas pesadas), então é mais
+conservador que a normal. Repare que `nu` precisa ser maior que 2 para a variância existir;
+com `nu` muito baixo, o termo `nu / (nu - 2)` infla bastante a cauda. Na Aula 6 formalizamos
+VaR paramétrico, histórico e Monte Carlo, além de Expected Shortfall.
+:::
+
+## Parte 6: CAPM e betas
+
+Por fim, medimos a exposição ao mercado. O **beta** de cada ativo vem da regressão dos
+retornos contra o Ibovespa (ou, de forma equivalente, `cov / var`). O beta da carteira é
+a média ponderada dos betas pelos pesos.
+
+```{python}
+mkt = ret_bench.reindex(retornos.index).dropna()
+idx = retornos.index.intersection(mkt.index)
+
+# Beta individual via cov/var e via regressão (devem bater)
+betas = {}
+for a in ativos:
+    r = retornos.loc[idx, a]
+    betas[a] = np.cov(r, mkt.loc[idx])[0, 1] / np.var(mkt.loc[idx])
+
+# Beta da carteira: regressão dos retornos do portfólio contra o Ibov
+port_ret_series = (retornos.loc[idx] * pesos_finais).sum(axis=1)
+X = sm.add_constant(mkt.loc[idx])
+capm = sm.OLS(port_ret_series, X).fit()
+beta_portfolio_ols = capm.params.iloc[1]
+beta_portfolio_pond = sum(betas[a] * w for a, w in zip(ativos, pesos_finais))
+
+tab_betas = pd.Series(betas, name="Beta").to_frame()
+tab_betas.index = [nomes[a] for a in ativos]
+tab_betas.round(3)
+```
+
+```{python}
+print(f"Beta da carteira (regressão): {beta_portfolio_ols:.3f}")
+print(f"Beta da carteira (média ponderada dos betas): {beta_portfolio_pond:.3f}")
+print(f"Alpha diário (intercepto): {capm.params.iloc[0]:.5f}")
+```
 
 ::: {.callout-important}
-## Dinâmica
+## A resposta da pergunta de negócio
 
-1. **Forme** duplas ou trios
-2. **Escolha** 5 a 10 ativos da B3 alinhados à sua área de atuação
-3. **Verifique** os fatos estilizados e ajuste um GARCH(1,1) num ativo representativo
-4. **Otimize** o portfólio (mínima variância e máximo Sharpe) no período de treino
-5. **Simule** o retorno dos últimos 6 meses (backtest) vs. Ibovespa
-6. **Apresente** em 5 min: escolhas, GARCH, pesos, performance, drawdown
+Os betas dos FIIs costumam ficar **bem abaixo de 1**: eles se movem pouco com o Ibovespa.
+Isso é exatamente o ponto de ter FIIs na carteira (descorrelação com a bolsa), e não um
+sinal de mau investimento por si só. "Péssimo ou apenas ruim" depende do retorno
+ajustado ao risco, não só do retorno absoluto. Na Aula 7 formalizamos o CAPM e a leitura
+de beta, alpha e a reta de mercado.
+:::
 
-**Critérios**: Sharpe ratio do backtest (40%) · justificativa (40%) · diagnóstico (20%).
+# Dinâmica: Monte sua Carteira
+
+::: {.callout-important}
+## App interativo (Shiny for Python)
+
+Agora é a vez de vocês. Em grupos, abram o app **Monte sua Carteira** e construam uma
+carteira que façam sentido defender:
+
+1. **Escolham** os ativos (os FIIs do lab e alguns blue-chips estão disponíveis).
+2. **Mexam nos pesos** com os sliders e observem, ao vivo, onde a carteira cai na
+   fronteira eficiente.
+3. **Comparem** retorno, volatilidade, Sharpe e VaR entre as carteiras testadas.
+4. **Olhem** o backtest acumulado contra o Ibovespa e a matriz de correlação.
+5. **Escolham uma carteira** para apresentar em 2 minutos: por que esses ativos, por que
+   esses pesos, e o que a fronteira/Sharpe/VaR dizem sobre ela.
+
+O app roda **direto no navegador**, sem instalar nada: abram a página
+[App: Monte sua Carteira](app-carteira.qmd). A primeira carga leva alguns segundos
+(o Python sobe no navegador via shinylive) e os dados são de um catálogo de ativos da B3
+já embarcado.
+
+Para rodar local (mesmo app, sem a espera do shinylive), na pasta do repositório:
+
+```bash
+shiny run labs/app-carteira/app.py
+```
+
+O passo a passo e como atualizar o catálogo estão no `labs/app-carteira/README.md`.
+:::
+
+::: {.callout-tip}
+## Ponte para o trabalho final
+
+Essa dinâmica é a semente da **análise surpreendente** (15% da nota do trabalho final):
+nada impede que o artefato extra do grupo seja exatamente um app desses, adaptado aos
+ativos que vocês escolherem. Visualizar carteiras ao vivo costuma impressionar o comitê
+muito mais que uma tabela estática.
 :::

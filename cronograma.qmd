@@ -137,7 +137,7 @@ Segunda, 1 de Junho — 19h00 a 22h30
 :::
 [Aula]{.tipo .tipo-aula-badge} **Remota** — 3.5h
 
-**Aula 6 — VaR e Gestão de Risco.** VaR paramétrico, histórico e Monte Carlo. Expected Shortfall. Backtesting (Kupiec, semáforo de Basileia). Conexão com a volatilidade GARCH da aula anterior.
+**Aula 6 — VaR e Risco.** VaR paramétrico, histórico e Monte Carlo. Expected Shortfall. Backtesting do VaR e leitura das violações. Conexão com a volatilidade GARCH da aula anterior.
 :::
 
 ::: {.schedule-card .tipo-lab}
@@ -146,10 +146,12 @@ Segunda, 8 de Junho — 19h00 a 22h30
 :::
 [Lab]{.tipo .tipo-lab-badge} **Remota** — 3.5h
 
-**Lab 3 — Séries Financeiras, GARCH e Portfólios.** Laboratório integrado em dois blocos:
+**Lab 3 — Séries Financeiras, GARCH e Portfólios.** Laboratório remoto em quatro momentos:
 
-- **Bloco 3.1:** `yfinance` em ativos brasileiros, construção de retornos, verificação empírica dos fatos estilizados (cauda pesada, clusters de volatilidade, autocorrelação dos retornos ao quadrado). Ajuste de GARCH/EGARCH/GJR-GARCH e previsão de volatilidade.
-- **Bloco 3.2:** Matriz de covariância, fronteira eficiente (mínima variância e máximo Sharpe) via `scipy.optimize`, backtest contra Ibovespa, métricas de performance (Sharpe, Max Drawdown). Prepara o terreno para a formalização de CAPM na aula presencial seguinte.
+- **Bloco A (0:00 a 0:30): resultados do trabalho intermediário.** Apresentação da correção das previsões (componente competitivo por grupo e predição agregada da turma) e discussão das lições.
+- **Bloco B (0:30 a 1:00): leitura conjunta do trabalho final.** Passamos o enunciado em conjunto, alinhamos escopo, formato de entrega e a ideia da análise surpreendente.
+- **Bloco C (1:00 a 2:30): código do lab linha a linha.** `yfinance` em fundos imobiliários brasileiros, construção de retornos, fatos estilizados (cauda pesada, clusters de volatilidade, autocorrelação dos retornos ao quadrado), grid de modelos GARCH e previsão de volatilidade, fronteira eficiente por Monte Carlo (mínima variância e máximo Sharpe), VaR via t de Student e betas/CAPM contra o Ibovespa. Prepara o terreno para a formalização de CAPM na aula presencial seguinte.
+- **Bloco D (2:30 a 3:30): dinâmica Monte sua Carteira.** Em grupos, os alunos usam um [app interativo](labs/app-carteira.qmd) (Shiny for Python, rodando no navegador) para mexer nos pesos, visualizar a fronteira e comparar risco, retorno, Sharpe e VaR ao vivo, escolhendo uma carteira para defender. Serve de semente para a análise surpreendente do trabalho final.
 :::
 
 ::: {.schedule-card .tipo-juntos}

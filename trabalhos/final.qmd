@@ -1,11 +1,13 @@
 ---
 title: "Trabalho Final"
-subtitle: "Análise de Portfólio com Gestão de Risco"
+subtitle: "Análise e Otimização de Portfólio"
 ---
 
 ## Objetivo
 
-Aplicar os conceitos da **Parte 2** (volatilidade, VaR, CAPM, otimização) para construir e avaliar um portfólio de investimentos com **gestão de risco integrada**.
+Aplicar os conceitos da **Parte 2** (volatilidade, CAPM, otimização de carteira) para
+construir, avaliar e comunicar um portfólio de investimentos, simulando uma
+apresentação ao comitê de investimentos.
 
 ::: {.callout-important}
 ## Formato da Entrega
@@ -21,8 +23,8 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
 
 ### 1. Seleção de Ativos (20%)
 
-- Escolha **6 ativos** (ações, ETFs ou FIIs) do mercado brasileiro ou externo
-  — podem ser do mesmo setor (tecnologia, varejo, bancos etc.) ou de setores distintos,
+- Escolha **6 ativos** (ações, ETFs ou FIIs) do mercado brasileiro ou externo.
+  Podem ser do mesmo setor (tecnologia, varejo, bancos etc.) ou de setores distintos,
   desde que tenham histórico compatível
 - **Justificativa de negócios** para cada ativo: entender fundamentalmente o negócio
   da empresa e correlacioná-lo com os achados quantitativos (*storytelling*)
@@ -34,7 +36,8 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
 
 - Ajuste modelos **GARCH univariados** para cada ativo e escolha o mais adequado via
   critérios de informação e/ou validação cruzada
-- Compare ao menos duas variantes (ex: GARCH vs. EGARCH vs. GJR-GARCH)
+- Se fizer sentido, explore variantes do GARCH (por exemplo EGARCH ou GJR-GARCH para
+  capturar efeito alavancagem)
 - Use distribuição **$t$ de Student** (justifique)
 - Interprete os parâmetros: persistência, efeito alavancagem, half-life
 - **Previsão um passo à frente** da volatilidade de cada ativo
@@ -44,15 +47,7 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
   iniciais, ajuste um modelo de volatilidade para a série agregada e faça a previsão
   um passo à frente da volatilidade da carteira
 
-### 3. Gestão de Risco (25%)
-
-- Calcule **VaR** e **Expected Shortfall** do portfólio
-- Use pelo menos 2 abordagens (paramétrico + histórico, ou + Monte Carlo)
-- **Backtesting** do VaR com teste de Kupiec
-- Classifique o modelo pelo semáforo de Basileia
-- Análise de cenários de stress (ex: queda de 5% do Ibovespa)
-
-### 4. CAPM e Otimização de Portfólio (20%)
+### 3. CAPM e Otimização de Portfólio (25%)
 
 - **Betas individuais** de cada ativo estimados via regressão simples contra um índice
   de mercado adequado (Ibovespa / S&P 500), com comentários sobre magnitude e sinal
@@ -63,9 +58,21 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
 - **Repita o cálculo de volatilidade e beta do portfólio otimizado** e compare com
   o portfólio inicial: o risco diminuiu? O beta mudou? O retorno esperado melhorou?
 - Compare com uma alocação equal-weight (1/N)
-- Backtest de 6 meses (walk-forward)
 
-### 5. Apresentação e Conclusão (10%)
+### 4. Análise Surpreendente (15%)
+
+Entregue **um artefato extra** que vá além do roteiro e mostre iniciativa. Vale
+criatividade e execução: algo que faça o comitê pensar "isso eu não esperava". Exemplos:
+
+- um **app ou dashboard interativo** (Shiny for Python, Streamlit) que permita
+  visualizar carteiras, mexer nos pesos e ver risco/retorno ao vivo, na linha da
+  dinâmica do Lab 3
+- uma **simulação interativa** de cenários (choques de mercado, mudança de janela,
+  diferentes restrições de peso)
+- uma análise **não trivial** conectada ao *storytelling*: estudo de um evento de
+  mercado, comparação com um fundo real, identificação de regimes de volatilidade etc.
+
+### 5. Apresentação e Conclusão (15%)
 
 - Resumo executivo para não-técnicos
 - Qual portfólio você recomendaria ao comitê? Por quê?
@@ -78,17 +85,17 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
 - Como se comparam os **betas individuais** dos ativos selecionados?
 - Qual a volatilidade histórica da carteira vs. a volatilidade prevista?
 - Como foram os **retornos dos últimos 12 meses** vis-à-vis a volatilidade observada?
-- A otimização entregou uma carteira dominante no sentido de Markowitz?
+- A otimização melhorou risco e retorno frente à carteira inicial (pesos iniciais e equal-weight)?
 
 ## Critérios de Avaliação
 
 | Critério | Peso | Excelente | Adequado | Insuficiente |
 |----------|------|-----------|----------|-------------|
 | Seleção | 20% | Diversificada, justificada | Razoável | Sem justificativa |
-| GARCH | 25% | Múltiplos modelos, interpretação | 1 modelo correto | Sem GARCH |
-| Risco | 25% | VaR + ES + backtest + stress | VaR básico | Incompleto |
-| Portfólio | 20% | Fronteira + Sharpe + backtest | Otimização básica | Sem otimização |
-| Apresentação | 10% | Clara, executiva, crítica | Funcional | Confusa |
+| GARCH | 25% | Modelo bem escolhido, interpretação | 1 modelo correto | Sem GARCH |
+| Portfólio | 25% | Fronteira + Sharpe + mínima variância + comparação | Otimização básica | Sem otimização |
+| Análise surpreendente | 15% | Artefato criativo, bem executado | Extra simples | Ausente |
+| Apresentação | 15% | Clara, executiva, crítica | Funcional | Confusa |
 
 ::: {.callout-tip}
 ## Dicas
@@ -96,7 +103,7 @@ Monte um **relatório de análise financeira** que simule uma apresentação ao 
 2. **Use `arch`** para GARCH e `scipy.optimize` para portfólios
 3. **Interprete, não apenas calcule**: o comitê quer entender, não ver código
 4. **Teste de robustez**: seus resultados mudam se usar janela diferente?
-5. **Conecte as peças**: o GARCH alimenta o VaR, que alimenta a otimização
+5. **Conecte as peças**: o GARCH alimenta a previsão de volatilidade, que alimenta a otimização
 :::
 
 ## Apresentação Final
@@ -105,7 +112,7 @@ Na sessão presencial de **13 de junho**, cada grupo apresentará em **10 minuto
 
 1. Quais ativos e por quê (2 min)
 2. O que a volatilidade revela (3 min)
-3. Gestão de risco: VaR e cenários (3 min)
+3. Otimização da carteira e análise surpreendente (3 min)
 4. Recomendação final ao comitê (2 min)
 
 Seguido de **5 minutos de perguntas** no formato *Tribunal Estatístico*.
@@ -114,9 +121,9 @@ Seguido de **5 minutos de perguntas** no formato *Tribunal Estatístico*.
 
 Além dos critérios quantitativos acima, a avaliação leva em conta:
 
-- **Storytelling** — a apresentação conta uma história coerente?
+- **Storytelling**: a apresentação conta uma história coerente?
 - **Visual e coerência** do texto/slides
-- **Incorporação dos ensinamentos das aulas** (conexão explícita com VaR, GARCH, CAPM)
+- **Incorporação dos ensinamentos das aulas** (conexão explícita com GARCH, CAPM, otimização)
 - **Seleção correta dos modelos** com justificativa técnica
 - **Qualidade dos códigos** (reprodutibilidade, organização, legibilidade)
 - **Profundidade das conclusões**
@@ -126,7 +133,7 @@ Além dos critérios quantitativos acima, a avaliação leva em conta:
 Notebooks de referência da Profa. Paloma disponíveis em
 [Materiais Complementares](../complementar/index.qmd):
 
-- `aula04-volatilidade-arch-python.ipynb` — pipeline `arch` em Python
-- `aula04-volatilidade-garch-r.qmd` — GARCH, rugarch e SV em R
-- `aula05-capm-var-yfinance.ipynb` — CAPM, VaR e rolling betas
-- `aula06-otimizacao-markowitz.ipynb` — fronteira eficiente via `scipy.optimize`
+- `aula04-volatilidade-arch-python.ipynb`: pipeline `arch` em Python
+- `aula04-volatilidade-garch-r.qmd`: GARCH, rugarch e SV em R
+- `aula05-capm-var-yfinance.ipynb`: CAPM e rolling betas
+- `aula06-otimizacao-markowitz.ipynb`: fronteira eficiente via `scipy.optimize`

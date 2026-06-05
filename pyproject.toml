@@ -26,6 +26,10 @@ dependencies = [
     "chronos-forecasting>=2.2.2",
     "tsfresh>=0.20",
     "pycatch22>=0.4",
+    "shiny>=1.6.3",
+    "shinywidgets>=0.8.1",
+    "faicons>=0.2.2",
+    "shinylive>=0.8.9",
 ]
 
 [dependency-groups]

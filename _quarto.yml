@@ -49,6 +49,12 @@ website:
             href: aulas/aula06-var.qmd
           - text: "Lab 3: Séries Financeiras e Portfólios (08/jun)"
             href: labs/lab03-financeiras.qmd
+          - text: "Lab 3 (versão alternativa): blue-chips"
+            href: labs/lab03-financeiras-alternativo.qmd
+          - text: "Lab 3 (versão em R)"
+            href: labs/lab03-financeiras-r.qmd
+          - text: "App: Monte sua Carteira (interativo)"
+            href: labs/app-carteira.qmd
           - text: "Aula 7: CAPM e Portfólios (13/jun)"
             href: aulas/aula07-portfolios.qmd
           - text: "Aula 8: Tópicos Avançados (13/jun)"
