@@ -1,7 +1,7 @@
 ---
 title: "Lab 3 (versão alternativa): blue-chips e fronteira por otimização"
 subtitle: "Pipeline completo com 8 ações líquidas, GARCH e fronteira via scipy.optimize"
-jupyter: pyvenv
+jupyter: python3
 ---
 
 ::: {.callout-note}
