@@ -4,9 +4,14 @@ Roda tanto local (`shiny run labs/app-carteira/app.py`) quanto embutido no site 
 shinylive (Pyodide, no navegador). Para funcionar no navegador não usa `yfinance`: lê os
 retornos pré-baixados de `dados_carteira.csv` (gerado por `fetch_dados.py`).
 
-Os grupos escolhem ativos do catálogo (buscando por nome), mexem nos pesos e veem ao vivo
-retorno, volatilidade, Sharpe, VaR, a fronteira eficiente, o backtest contra o Ibovespa e
-a matriz de correlação.
+Fluxo da dinâmica:
+1. Cada aluno responde às loterias (estilo Kahneman/Holt-Laury) e o app estima o seu
+   coeficiente de aversão a risco (lambda) da utilidade média-variância U = mu - lambda/2 * sigma^2.
+2. Os alunos escolhem ativos do catálogo (buscando por nome), mexem nos pesos e veem ao
+   vivo retorno, volatilidade, Sharpe, VaR, a fronteira eficiente, o retorno acumulado vs.
+   o Ibovespa e a matriz de correlação.
+3. A fronteira marca a "carteira ótima do seu perfil": a que maximiza a utilidade dado o
+   lambda elicitado. Lambda alto puxa para a mínima variância; lambda baixo, para mais retorno.
 """
 import io
 from pathlib import Path
@@ -22,8 +27,29 @@ BENCH = "^BVSP"
 
 INSPER_RED = "#E50505"
 INSPER_TURQUESA = "#3ACC9F"
+INSPER_AMARELO = "#FFCC00"
 INSPER_ROXO = "#730D9F"
 INSPER_GRAY = "#5B5B5B"
+
+# Loterias estilo Holt-Laury: em cada decisão, a "chance alta" p cresce. A opção A é
+# sempre a mais segura (payoffs próximos) e a B a mais arriscada (payoffs distantes).
+# Quanto mais vezes a pessoa fica no seguro (A), maior a aversão a risco.
+LOTERIAS = [0.10, 0.30, 0.50, 0.70, 0.90, 1.00]
+
+# Mapa didático do nº de escolhas seguras (0 a 6) para o lambda da utilidade
+# média-variância. Não é uma estimativa precisa de CRRA: é uma calibração para que o
+# perfil mova de forma visível o ponto ótimo ao longo da fronteira.
+LAMBDA_MAP = {0: 1.0, 1: 2.0, 2: 3.0, 3: 5.0, 4: 8.0, 5: 12.0, 6: 20.0}
+
+
+def perfil_label(lam: float) -> str:
+    if lam <= 2:
+        return "tolerante ao risco"
+    if lam <= 5:
+        return "moderado"
+    if lam <= 12:
+        return "avesso ao risco"
+    return "muito avesso ao risco"
 
 
 def _load_returns() -> pd.DataFrame:
@@ -110,6 +136,21 @@ def nome_ativo(ticker: str) -> str:
     return f"{nm} ({ticker.replace('.SA', '')})" if nm else ticker
 
 
+def loterias_inputs():
+    """Radios das loterias (uma por decisão). A = seguro, B = arriscado."""
+    itens = []
+    for i, p in enumerate(LOTERIAS):
+        itens.append(ui.input_radio_buttons(
+            f"lot{i}", f"Decisão {i + 1}: chance alta = {p:.0%}",
+            choices={
+                "A": f"Seguro: {p:.0%} → R$ 40, senão R$ 32",
+                "B": f"Arriscado: {p:.0%} → R$ 77, senão R$ 2",
+            },
+            selected="A",
+        ))
+    return itens
+
+
 # ---------------------------------------------------------------- UI
 app_ui = ui.page_sidebar(
     ui.sidebar(
@@ -130,16 +171,58 @@ app_ui = ui.page_sidebar(
         title="Monte sua Carteira",
         width=330,
     ),
+    ui.accordion(
+        ui.accordion_panel(
+            "1. Descubra o seu perfil de risco (loterias de Kahneman)",
+            ui.markdown(
+                "Em cada decisão, escolha entre uma aposta **segura** (A) e uma "
+                "**arriscada** (B) com o mesmo padrão de chances. Quanto mais vezes você "
+                "fica no seguro, mais **avesso ao risco** é o seu perfil. O app converte "
+                "isso no coeficiente $\\lambda$ da utilidade $U = \\mu - \\tfrac{\\lambda}{2}\\sigma^2$ "
+                "e marca, na fronteira, a carteira ótima para você."
+            ),
+            ui.layout_columns(*loterias_inputs(), col_widths=(4, 4, 4, 4, 4, 4)),
+            ui.hr(),
+            ui.markdown(
+                "**Efeito de enquadramento (Kahneman e Tversky).** As duas decisões "
+                "abaixo têm o mesmo valor esperado. Veja se você muda de atitude entre "
+                "ganhos e perdas:"
+            ),
+            ui.layout_columns(
+                ui.input_radio_buttons(
+                    "frame_ganho", "Cenário de ganhos: você prefere",
+                    choices={
+                        "seguro": "Receber R$ 1.000 garantidos",
+                        "aposta": "50% de ganhar R$ 2.000 (50% de nada)",
+                    },
+                    selected="seguro",
+                ),
+                ui.input_radio_buttons(
+                    "frame_perda", "Cenário de perdas: você prefere",
+                    choices={
+                        "seguro": "Perder R$ 1.000 garantidos",
+                        "aposta": "50% de perder R$ 2.000 (50% de nada)",
+                    },
+                    selected="aposta",
+                ),
+                col_widths=(6, 6),
+            ),
+            ui.output_ui("nota_frame"),
+        ),
+        open=True,
+    ),
     ui.layout_columns(
         ui.value_box("Retorno (a.a.)", ui.output_text("vb_ret")),
         ui.value_box("Volatilidade (a.a.)", ui.output_text("vb_vol")),
         ui.value_box("Sharpe", ui.output_text("vb_sharpe")),
         ui.value_box("VaR 95% (dia)", ui.output_text("vb_var")),
+        ui.value_box("Seu perfil (λ)", ui.output_text("vb_lambda")),
         fill=False,
     ),
     ui.layout_columns(
-        ui.card(ui.card_header("Fronteira eficiente: sua carteira vs. 3000 aleatórias"),
-                output_widget("plot_fronteira")),
+        ui.card(ui.card_header("Fronteira: sua carteira, 3000 aleatórias e a ótima do seu perfil"),
+                output_widget("plot_fronteira"),
+                ui.output_ui("txt_sugestao")),
         ui.card(ui.card_header("Pesos (renormalizados)"), output_widget("plot_pesos")),
         col_widths=(8, 4),
     ),
@@ -189,6 +272,45 @@ def server(input, output, session):
             for a in ativos:
                 ui.update_slider(sid(a), value=v)
 
+    # ------------------------------------------------ perfil de risco (lambda)
+    @reactive.calc
+    def lam():
+        n_safe = 0
+        for i in range(len(LOTERIAS)):
+            try:
+                if input[f"lot{i}"]() == "A":
+                    n_safe += 1
+            except Exception:
+                pass
+        return LAMBDA_MAP[min(n_safe, 6)]
+
+    @render.text
+    def vb_lambda():
+        lv = lam()
+        return f"{lv:g} · {perfil_label(lv)}"
+
+    @render.ui
+    def nota_frame():
+        try:
+            g = input.frame_ganho()
+            p = input.frame_perda()
+        except Exception:
+            return ui.div()
+        if g == "seguro" and p == "aposta":
+            txt = ("Você exibiu o **efeito reflexão** de Kahneman e Tversky: avesso ao "
+                   "risco nos ganhos (prefere o certo) e propenso ao risco nas perdas "
+                   "(arrisca para evitar a perda certa). É a marca da **aversão à perda**.")
+            cor = INSPER_ROXO
+        elif g == "aposta" and p == "seguro":
+            txt = ("Atitude invertida em relação ao padrão usual: propenso nos ganhos e "
+                   "avesso nas perdas. Vale discutir o que motivou cada escolha.")
+            cor = INSPER_GRAY
+        else:
+            txt = ("Você manteve a mesma atitude (consistente) nos dois cenários. Boa parte "
+                   "das pessoas troca de lado: esse é o ponto da teoria do prospecto.")
+            cor = INSPER_GRAY
+        return ui.div(ui.markdown(txt), style=f"border-left:4px solid {cor};padding-left:10px;")
+
     @reactive.calc
     def pesos():
         ativos = ativos_sel()
@@ -237,6 +359,30 @@ def server(input, output, session):
             da=da, wv=wv, mean_ret=mean_ret, cov=cov, ativos=ativos_w,
         )
 
+    @reactive.calc
+    def frente():
+        """Nuvem Monte Carlo das carteiras possíveis (retorno/risco anuais, em %)."""
+        s = stats_carteira()
+        if s is None or len(s["ativos"]) < 2:
+            return None
+        rng = np.random.default_rng(42)
+        W = rng.dirichlet(np.ones(len(s["ativos"])), 3000)
+        rr = (W @ s["mean_ret"]) * 252 * 100
+        rk = np.sqrt(np.einsum("ij,jk,ik->i", W, s["cov"], W)) * np.sqrt(252) * 100
+        return dict(W=W, rr=rr, rk=rk, sh=rr / rk, ativos=s["ativos"])
+
+    @reactive.calc
+    def sugestao():
+        """Carteira que maximiza U = mu - lambda/2 * sigma^2 na nuvem (perfil do aluno)."""
+        f = frente()
+        if f is None:
+            return None
+        lv = lam()
+        U = (f["rr"] / 100) - 0.5 * lv * ((f["rk"] / 100) ** 2)
+        j = int(np.argmax(U))
+        return dict(j=j, lam=lv, rr=float(f["rr"][j]), rk=float(f["rk"][j]),
+                    pesos=pd.Series(f["W"][j], index=f["ativos"]))
+
     @render.text
     def vb_ret():
         s = stats_carteira()
@@ -257,23 +403,33 @@ def server(input, output, session):
         s = stats_carteira()
         return "-" if s is None else f"{s['var'] * 100:.2f}%"
 
+    @render.ui
+    def txt_sugestao():
+        sug = sugestao()
+        if sug is None:
+            return ui.div()
+        pes = sug["pesos"]
+        pes = pes[pes > 0.01].sort_values(ascending=False)
+        itens = ", ".join(f"{a.replace('.SA', '')} {p:.0%}" for a, p in pes.items())
+        return ui.markdown(
+            f"**Carteira ótima para o seu perfil** (λ = {sug['lam']:g}, {perfil_label(sug['lam'])}): "
+            f"retorno {sug['rr']:.1f}% a.a., risco {sug['rk']:.1f}% a.a. "
+            f"Pesos sugeridos: {itens}."
+        )
+
     @render_widget
     def plot_fronteira():
-        s = stats_carteira()
+        f = frente()
         fig = go.Figure()
-        if s is None or len(s["ativos"]) < 2:
+        if f is None:
             fig.add_annotation(text="Selecione ao menos 2 ativos com peso > 0.",
                                showarrow=False, font=dict(size=16))
             fig.update_layout(template="plotly_white")
             return fig
-        rng = np.random.default_rng(42)
-        W = rng.dirichlet(np.ones(len(s["ativos"])), 3000)
-        rr = (W @ s["mean_ret"]) * 252 * 100
-        rk = np.sqrt(np.einsum("ij,jk,ik->i", W, s["cov"], W)) * np.sqrt(252) * 100
-        sh = rr / rk
+        s = stats_carteira()
         fig.add_trace(go.Scatter(
-            x=rk, y=rr, mode="markers",
-            marker=dict(size=4, color=sh, colorscale="Viridis", opacity=0.55,
+            x=f["rk"], y=f["rr"], mode="markers",
+            marker=dict(size=4, color=f["sh"], colorscale="Viridis", opacity=0.55,
                         showscale=True, colorbar=dict(title="Sharpe")),
             name="Aleatórias", hovertemplate="risco %{x:.1f}%<br>retorno %{y:.1f}%<extra></extra>"))
         fig.add_trace(go.Scatter(
@@ -282,6 +438,14 @@ def server(input, output, session):
                         line=dict(width=1, color="white")),
             name="Sua carteira",
             hovertemplate="SUA CARTEIRA<br>risco %{x:.1f}%<br>retorno %{y:.1f}%<extra></extra>"))
+        sug = sugestao()
+        if sug is not None:
+            fig.add_trace(go.Scatter(
+                x=[sug["rk"]], y=[sug["rr"]], mode="markers",
+                marker=dict(size=18, color=INSPER_AMARELO, symbol="diamond",
+                            line=dict(width=1.5, color="black")),
+                name=f"Ótima p/ seu perfil (λ={sug['lam']:g})",
+                hovertemplate="ÓTIMA P/ SEU PERFIL<br>risco %{x:.1f}%<br>retorno %{y:.1f}%<extra></extra>"))
         fig.update_layout(template="plotly_white", xaxis_title="Risco anual (%)",
                           yaxis_title="Retorno anual (%)", margin=dict(t=10, r=10, l=10, b=10),
                           legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
