@@ -7,7 +7,7 @@ jupyter: python3
 ::: {.callout-note}
 ## Versão alternativa
 Esta é a **versão alternativa** do Lab 3, com 8 blue-chips da B3 e a fronteira eficiente
-resolvida por otimização (`scipy.optimize`), além de um backtest contra o Ibovespa. A
+resolvida por otimização (`scipy.optimize`). A
 versão **oficial** do laboratório usa fundos imobiliários, fronteira por Monte Carlo, VaR
 via t de Student e CAPM: veja [Lab 3 oficial](lab03-financeiras.qmd).
 :::
@@ -18,7 +18,7 @@ via t de Student e CAPM: veja [Lab 3 oficial](lab03-financeiras.qmd).
 - [Aplicar]{.bloom-badge .bloom-aplicar} download e tratamento de dados financeiros com `yfinance`
 - [Analisar]{.bloom-badge .bloom-analisar} fatos estilizados em ativos brasileiros
 - [Criar]{.bloom-badge .bloom-criar} modelos GARCH e portfólios otimizados
-- [Avaliar]{.bloom-badge .bloom-avaliar} performance via backtest contra benchmark
+- [Avaliar]{.bloom-badge .bloom-avaliar} carteiras de mínima variância e máximo Sharpe pela relação risco-retorno
 :::
 
 ::: {.callout-tip}
@@ -27,7 +27,7 @@ via t de Student e CAPM: veja [Lab 3 oficial](lab03-financeiras.qmd).
 O Lab 3 é dividido em dois blocos complementares sobre o **mesmo pool de ativos**, para você sair com o pipeline end-to-end de séries financeiras.
 
 - **Bloco 3.1** — Séries financeiras e GARCH. Preços → log-retornos → fatos estilizados → modelos GARCH → previsão de volatilidade.
-- **Bloco 3.2** — Portfólios. Retorno/risco por ativo → matriz de covariância → fronteira eficiente → backtest contra o Ibovespa.
+- **Bloco 3.2** — Portfólios. Retorno/risco por ativo → matriz de covariância → fronteira eficiente → carteiras de mínima variância e máximo Sharpe.
 :::
 
 ## Setup compartilhado
@@ -317,42 +317,40 @@ for ativo, peso in zip(ativos, res_sharpe.x):
 ```
 
 ```{python}
-n_portfolios = 100
-retornos_alvo = np.linspace(mu.min(), mu.max(), n_portfolios)
-riscos_fronteira = []
+rf = 0.10
 
-for ret_alvo in retornos_alvo:
-    cons = [
-        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
-        {'type': 'eq', 'fun': lambda w, r=ret_alvo: w @ mu - r},
-    ]
-    res = minimize(portfolio_variance, w0, args=(sigma,),
-                   method='SLSQP', bounds=bounds, constraints=cons)
-    riscos_fronteira.append(np.sqrt(res.fun) if res.success else np.nan)
-
+# Simulamos carteiras (Monte Carlo) sob a MESMA restricao da otimizacao:
+# long-only e peso maximo de 30% por ativo. Assim a nuvem e os pontos otimos
+# vivem no mesmo conjunto de carteiras possiveis.
 rng = np.random.default_rng(42)
 n_random = 5000
-ret_random, risk_random = [], []
-for _ in range(n_random):
-    w = rng.dirichlet(np.ones(n_ativos))
-    r, s = portfolio_stats(w, mu, sigma)
-    ret_random.append(r); risk_random.append(s)
+pesos_random = []
+while len(pesos_random) < n_random:
+    w = rng.dirichlet(np.ones(n_ativos), size=2000)
+    w = w[(w <= 0.30).all(axis=1)]   # mantem so as que respeitam o teto de 30%
+    pesos_random.extend(w)
+pesos_random = np.array(pesos_random[:n_random])
+
+ret_random = pesos_random @ mu
+risk_random = np.sqrt(np.einsum('ij,jk,ik->i', pesos_random, sigma, pesos_random))
+sharpe_random = (ret_random - rf) / risk_random
 
 r_mv, s_mv = portfolio_stats(res_minvar.x, mu, sigma)
 r_ms, s_ms = portfolio_stats(res_sharpe.x, mu, sigma)
 
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=np.array(risk_random)*100, y=np.array(ret_random)*100,
-                         mode='markers', marker=dict(size=2, color=INSPER_GRAY, opacity=0.3),
-                         name='Portfólios aleatórios'))
-fig.add_trace(go.Scatter(x=np.array(riscos_fronteira)*100, y=retornos_alvo*100,
-                         mode='lines', line=dict(color=INSPER_RED, width=3),
-                         name='Fronteira eficiente'))
+fig.add_trace(go.Scatter(
+    x=risk_random*100, y=ret_random*100, mode='markers',
+    marker=dict(size=4, color=sharpe_random, colorscale='Viridis',
+                colorbar=dict(title='Sharpe'), opacity=0.5),
+    name='Carteiras simuladas', hoverinfo='skip'))
 fig.add_trace(go.Scatter(x=[s_mv*100], y=[r_mv*100], mode='markers',
-                         marker=dict(size=15, color=INSPER_TURQUESA, symbol='star'),
+                         marker=dict(size=16, color=INSPER_TURQUESA, symbol='star',
+                                     line=dict(color='black', width=1)),
                          name='Mín. Variância'))
 fig.add_trace(go.Scatter(x=[s_ms*100], y=[r_ms*100], mode='markers',
-                         marker=dict(size=15, color=INSPER_AMARELO, symbol='star'),
+                         marker=dict(size=16, color=INSPER_AMARELO, symbol='star',
+                                     line=dict(color='black', width=1)),
                          name='Máx. Sharpe'))
 fig.add_trace(go.Scatter(x=risco_anual.values*100, y=ret_anual.values*100,
                          mode='markers+text',
@@ -360,83 +358,42 @@ fig.add_trace(go.Scatter(x=risco_anual.values*100, y=ret_anual.values*100,
                          textposition='top center',
                          marker=dict(size=10, color=INSPER_ROXO),
                          name='Ativos individuais'))
-fig.update_layout(title='Fronteira Eficiente de Markowitz',
+fig.update_layout(title='Simulação de carteiras (Monte Carlo)',
                   xaxis_title='Risco Anual (%)', yaxis_title='Retorno Anual (%)',
                   template='plotly_white', font_family='Inter',
                   legend=dict(yanchor='top', y=0.99, xanchor='left', x=0.01))
 fig.show()
 ```
 
-## Parte 6: Backtest contra o Ibovespa
+::: {.callout-note}
+## Onde está a fronteira eficiente?
+
+A **fronteira eficiente** é a borda superior-esquerda da nuvem: para cada nível de risco, a carteira de maior retorno possível. Aqui ela aparece como o próprio contorno da nuvem (note como as carteiras de Sharpe mais alto, em amarelo, se alinham nessa borda), sem precisar desenhar uma curva separada.
+
+Optamos por não traçar uma curva analítica por cima da nuvem. Quando se faz isso é fácil cometer uma inconsistência: a curva costuma ser calculada com a restrição de peso máximo de 30% por ativo, enquanto a nuvem é sorteada sem esse teto. Como são conjuntos de carteiras diferentes, alguns pontos sorteados acabam "fora" da curva. Aqui sorteamos a nuvem sob a mesma restrição usada na otimização (long-only, teto de 30%), então as duas estrelas (mínima variância e máximo Sharpe) caem naturalmente na borda da nuvem.
+:::
+
+### Pesos das carteiras ótimas
 
 ```{python}
-split_date = '2024-01-01'
-ret_treino = retornos.loc[:split_date]
-ret_teste  = retornos.loc[split_date:]
+labels = [a.replace('.SA', '') for a in ativos]
 
-mu_train    = ret_treino.mean().values * 252
-sigma_train = ret_treino.cov().values * 252
-
-res_bt = minimize(neg_sharpe, w0, args=(mu_train, sigma_train, 0.10),
-                  method='SLSQP', bounds=bounds, constraints=constraints)
-pesos_otimos = res_bt.x
-
-ret_portfolio_teste = (ret_teste * pesos_otimos).sum(axis=1)
-ret_bench_teste = ret_bench.loc[split_date:]
-
-idx_comum = ret_portfolio_teste.index.intersection(ret_bench_teste.index)
-ret_portfolio_teste = ret_portfolio_teste.loc[idx_comum]
-ret_bench_teste = ret_bench_teste.loc[idx_comum]
-
-cum_portfolio = (1 + ret_portfolio_teste).cumprod()
-cum_bench = (1 + ret_bench_teste).cumprod()
-
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=cum_portfolio.index, y=cum_portfolio.values,
-                         mode='lines', name='Portfólio Ótimo',
-                         line=dict(color=INSPER_RED, width=2)))
-fig.add_trace(go.Scatter(x=cum_bench.index, y=cum_bench.values,
-                         mode='lines', name='Ibovespa',
-                         line=dict(color=INSPER_GRAY, width=2)))
-fig.update_layout(title='Backtest: Portfólio Otimizado vs. Ibovespa',
-                  template='plotly_white', font_family='Inter',
-                  yaxis_title='Retorno Acumulado', hovermode='x unified')
+fig = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                    subplot_titles=['Mínima Variância', 'Máximo Sharpe'])
+fig.add_trace(go.Bar(x=labels, y=res_minvar.x*100,
+                     marker_color=INSPER_TURQUESA, text=[f'{p:.0%}' for p in res_minvar.x],
+                     textposition='outside'), row=1, col=1)
+fig.add_trace(go.Bar(x=labels, y=res_sharpe.x*100,
+                     marker_color=INSPER_AMARELO, text=[f'{p:.0%}' for p in res_sharpe.x],
+                     textposition='outside'), row=1, col=2)
+fig.update_yaxes(title_text='Peso (%)', row=1, col=1)
+fig.update_layout(title='Pesos das carteiras ótimas (teto de 30% por ativo)',
+                  template='plotly_white', font_family='Inter', showlegend=False)
 fig.show()
 ```
 
-```{python}
-def performance_metrics(returns, rf_anual=0.10):
-    ret_anual = returns.mean() * 252
-    vol_anual = returns.std() * np.sqrt(252)
-    sharpe = (ret_anual - rf_anual) / vol_anual
-    cum = (1 + returns).cumprod()
-    peak = cum.cummax()
-    drawdown = (cum - peak) / peak
-    max_dd = drawdown.min()
-    return {
-        'Retorno Anual (%)': f"{ret_anual*100:.2f}",
-        'Volatilidade (%)':  f"{vol_anual*100:.2f}",
-        'Sharpe':            f"{sharpe:.3f}",
-        'Max Drawdown (%)':  f"{max_dd*100:.2f}",
-    }
+## Fecho
 
-pd.DataFrame({
-    'Portfólio': performance_metrics(ret_portfolio_teste),
-    'Ibovespa':  performance_metrics(ret_bench_teste),
-})
-```
+Você passou pelo pipeline completo: preços, log-retornos, fatos estilizados, GARCH, previsão de volatilidade e construção das carteiras de mínima variância e máximo Sharpe sob restrições realistas.
 
-## Exercício final — Competição de portfólios
-
-::: {.callout-important}
-## Dinâmica
-
-1. **Forme** duplas ou trios
-2. **Escolha** 5 a 10 ativos da B3 alinhados à sua área de atuação
-3. **Verifique** os fatos estilizados e ajuste um GARCH(1,1) num ativo representativo
-4. **Otimize** o portfólio (mínima variância e máximo Sharpe) no período de treino
-5. **Simule** o retorno dos últimos 6 meses (backtest) vs. Ibovespa
-6. **Apresente** em 5 min: escolhas, GARCH, pesos, performance, drawdown
-
-**Critérios**: Sharpe ratio do backtest (40%) · justificativa (40%) · diagnóstico (20%).
-:::
+Para a versão oficial do laboratório (fundos imobiliários, fronteira por Monte Carlo, VaR via t de Student e CAPM) veja o [Lab 3 oficial](lab03-financeiras.qmd). Para montar e comparar carteiras de forma interativa, use o [app Monte sua Carteira](app-carteira.qmd).
