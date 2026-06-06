@@ -5,135 +5,58 @@ subtitle: "Análise e Otimização de Portfólio"
 
 ## Objetivo
 
-Aplicar os conceitos da **Parte 2** (volatilidade, CAPM, otimização de carteira) para
-construir, avaliar e comunicar um portfólio de investimentos, simulando uma
-apresentação ao comitê de investimentos.
+Aplicar os conceitos da **Parte 2** (volatilidade, CAPM, otimização de carteira) para construir, avaliar e comunicar um portfólio de investimentos, simulando uma apresentação ao comitê de investimentos.
 
 ::: {.callout-important}
 ## Formato da Entrega
-- **Notebook Jupyter** (.ipynb) com código reprodutível
-- **Apresentação** de 10 minutos (slides ou notebook)
-- **Prazo**: semana de 15 de junho (domingo 22/jun, 23h59)
-- **Dupla ou trio** (indicar no notebook)
+- **Notebook Jupyter** (.ipynb) com código reprodutível ou site com os códigos e resultados compilados (ex: GitHub Pages, etc)
+- **Apresentação** de 10 minutos (slides ou notebook, de preferência slides, considerando a importância do storytelling)
+- **Prazo**: 22/jun (online, sessão de apresentação)
 :::
 
 ## Especificação
 
 Monte um **relatório de análise financeira** que simule uma apresentação ao comitê de investimentos.
 
-### 1. Seleção de Ativos (20%)
+### 1. Seleção de Ativos
 
-- Escolha **6 ativos** (ações, ETFs ou FIIs) do mercado brasileiro ou externo.
-  Podem ser do mesmo setor (tecnologia, varejo, bancos etc.) ou de setores distintos,
-  desde que tenham histórico compatível
-- **Justificativa de negócios** para cada ativo: entender fundamentalmente o negócio
-  da empresa e correlacioná-lo com os achados quantitativos (*storytelling*)
-- Análise descritiva individual: gráficos de preços e retornos, com **comentários
-  explícitos sobre possível heterocedasticidade condicional**
-- Download de dados via `yfinance` (mínimo 3 anos de dados diários)
+- Escolha um conjunto de ativos (ações, ETFs,  FIIs) do mercado brasileiro ou externo. Devem ter um histórico compatível com a modelagem de volatilidade. Como base, sugerimos a escolha de 6 ativos, mas o número pode variar dependendo da complexidade que desejarem explorar.
+- Elabore uma justificativa de negócios para a escolha da carteira: entender o propósito de cada ativo na carteira e a relação entre os ativos, utilizando argumentos quantitativos e de mercado (*storytelling*)
+- Análise descritiva individual: gráficos de preços e retornos, com comentários sobre heterocedasticidade condicional
 
-### 2. Modelagem de Volatilidade (25%)
+### 2. Modelagem de Volatilidade
 
-- Ajuste modelos **GARCH univariados** para cada ativo e escolha o mais adequado via
-  critérios de informação e/ou validação cruzada
-- Se fizer sentido, explore variantes do GARCH (por exemplo EGARCH ou GJR-GARCH para
-  capturar efeito alavancagem)
-- Use distribuição **$t$ de Student** (justifique)
-- Interprete os parâmetros: persistência, efeito alavancagem, half-life
-- **Previsão um passo à frente** da volatilidade de cada ativo
-- **Comparação entre ativos**: quais volatilidades são maiores/menores?
-  Relacione com o *storytelling* de cada negócio
-- **Volatilidade do portfólio**: calcule os retornos do portfólio usando pesos
-  iniciais, ajuste um modelo de volatilidade para a série agregada e faça a previsão
-  um passo à frente da volatilidade da carteira
+- Ajuste modelos **GARCH univariados** para cada ativo e escolha o mais adequado via critérios de informação e/ou validação cruzada
+- Se fizer sentido, explore variantes do GARCH (EGARCH, GJR-GARCH, IGARCH)
+- Use uma distribuição adequada para os resíduos (normal, t-student, skewed) e justifique a escolha
+- Faça a **previsão um passo à frente** da volatilidade de cada ativo e compare com a volatilidade histórica e entre ativos da carteira. Relacione com o *storytelling*. 
 
-### 3. CAPM e Otimização de Portfólio (25%)
+### 3. CAPM e Otimização de Portfólio
 
-- **Betas individuais** de cada ativo estimados via regressão simples contra um índice
+- Calcule os **betas individuais** de cada ativo estimados via regressão simples contra um índice
   de mercado adequado (Ibovespa / S&P 500), com comentários sobre magnitude e sinal
-- **Beta do portfólio** inicial (pesos definidos por vocês) assumindo as hipóteses do CAPM
-- Construa a **fronteira eficiente** com seus ativos
-- Identifique o portfólio de **máximo Sharpe** e o de **mínima variância**
-- Aplique **restrições realistas** (ex: $w_i \leq 30\%$, long-only)
-- **Repita o cálculo de volatilidade e beta do portfólio otimizado** e compare com
-  o portfólio inicial: o risco diminuiu? O beta mudou? O retorno esperado melhorou?
-- Compare com uma alocação equal-weight (1/N)
+- Construa a **fronteira eficiente** com seus ativos para encontrar as carteiras de mínimo risco e máximo Sharpe, usando volatilidade histórica ou volatilidade prevista pelos modelos. Escolha um portfólio otimizado para apresentar ao comitê, justificando a escolha do ponto de vista de negócios e risco-retorno.
+- Repita a modelagem de volatilidade (com previsão um passo à frente) e calcule o **beta do portfólio otimizado**, comparando com as séries individuais: como fica o risco? Como fica o beta? Como interpretar?
 
-### 4. Análise Surpreendente (15%)
+### 4. (Opcional) Análise de risco
 
-Entregue **um artefato extra** que vá além do roteiro e mostre iniciativa. Vale
-criatividade e execução: algo que faça o comitê pensar "isso eu não esperava". Exemplos:
+Se fizer sentido para o grupo, adicionar uma análise de risco qualitativa e/ou quantitativa do portfólio otimizado, com base em critérios como VaR, expected shortfall, entre outros que conhecerem ou pesquisarem. Relacione com o storytelling e a justificativa de negócios: quais os riscos mais relevantes para o portfólio? Quais os eventos que poderiam impactar negativamente? Como o portfólio se comportaria em um cenário de crise?
 
-- um **app ou dashboard interativo** (Shiny for Python, Streamlit) que permita
-  visualizar carteiras, mexer nos pesos e ver risco/retorno ao vivo, na linha da
-  dinâmica do Lab 3
-- uma **simulação interativa** de cenários (choques de mercado, mudança de janela,
-  diferentes restrições de peso)
-- uma análise **não trivial** conectada ao *storytelling*: estudo de um evento de
-  mercado, comparação com um fundo real, identificação de regimes de volatilidade etc.
+### 5. Apresentação e Conclusão
 
-### 5. Apresentação e Conclusão (15%)
+Na sessão online de **22 de junho**, cada grupo apresentará em **10 minutos**:
 
-- Resumo executivo para não-técnicos
-- Qual portfólio você recomendaria ao comitê? Por quê?
-- Quais os riscos que o comitê deveria monitorar?
-- Limitações da análise e próximos passos
-
-**Perguntas que o relatório deve responder explicitamente**
-
-- O portfólio escolhido tem beta acima ou abaixo de 1? Como interpretar isso?
-- Como se comparam os **betas individuais** dos ativos selecionados?
-- Qual a volatilidade histórica da carteira vs. a volatilidade prevista?
-- Como foram os **retornos dos últimos 12 meses** vis-à-vis a volatilidade observada?
-- A otimização melhorou risco e retorno frente à carteira inicial (pesos iniciais e equal-weight)?
+1. Escolha dos ativos: quais ativos e por quê
+2. O que a volatilidade revela
+3. Otimização da carteira e interpretação do portfólio
+4. Análise de risco (se tiver feito)
 
 ## Critérios de Avaliação
 
-| Critério | Peso | Excelente | Adequado | Insuficiente |
+| Critério | Peso | Excelente (100%) | Adequado (50%) | Insuficiente (0%) |
 |----------|------|-----------|----------|-------------|
-| Seleção | 20% | Diversificada, justificada | Razoável | Sem justificativa |
-| GARCH | 25% | Modelo bem escolhido, interpretação | 1 modelo correto | Sem GARCH |
-| Portfólio | 25% | Fronteira + Sharpe + mínima variância + comparação | Otimização básica | Sem otimização |
-| Análise surpreendente | 15% | Artefato criativo, bem executado | Extra simples | Ausente |
-| Apresentação | 15% | Clara, executiva, crítica | Funcional | Confusa |
+| Seleção de ativos e justificativa | 20% | Seleção coerente com o objetivo do portfólio, com justificativa técnico-econômica baseada em dados (papel de cada ativo, complementaridade e riscos). Evidencia pensamento crítico e conexão com o contexto de mercado. | Seleção parcialmente coerente, com alguma diversificação e justificativas descritivas, porém com menor profundidade analítica ou pouca conexão entre ativos e objetivo da carteira. | Seleção arbitrária ou pouco coerente, sem justificativa consistente, sem relação clara com objetivo de investimento e sem evidências quantitativas mínimas. |
+| Modelagem de volatilidade (GARCH) | 20% | Modelos especificados, estimados e comparados de forma adequada, com critérios de escolha explícitos, diagnóstico dos resíduos e interpretação econômica das previsões de volatilidade. | Aplicação correta de ao menos um modelo GARCH com resultados interpretados de forma básica, mas com comparação limitada de especificações e/ou diagnóstico incompleto. | Ausência de modelagem GARCH adequada, erros conceituais relevantes ou interpretação insuficiente dos resultados. |
+| CAPM e otimização de portfólio | 20% | Betas estimados e interpretados com consistência; construção da fronteira eficiente com identificação e análise de carteiras; escolha final bem justificada sob a ótica risco-retorno e comparação entre risco individual e risco do portfólio otimizado. | Estimativas e otimização realizadas de forma funcional (CAPM e/ou fronteira), com interpretação correta porém limitada em profundidade, comparação ou justificativa de decisão. | Não realiza CAPM e otimização de forma adequada, ou apresenta resultados sem consistência metodológica e sem interpretação de risco-retorno. |
+| Comunicação, estrutura analítica e reprodutibilidade | 40% | Apresentação clara, objetiva e orientada a decisão; visualizações informativas; conclusões críticas com limitações; código organizado. | Comunicação compreensível e estrutura básica correta, com resultados principais apresentados; há alguma narrativa e organização, porém com lacunas de clareza ou domínio conceitual. | Comunicação confusa ou fragmentada, sem encadeamento analítico; conclusões pouco sustentadas; baixa legibilidade/reprodutibilidade do material apresentado. |
 
-::: {.callout-tip}
-## Dicas
-1. **Comece pela qualidade dos dados**: dados limpos são a base de tudo
-2. **Use `arch`** para GARCH e `scipy.optimize` para portfólios
-3. **Interprete, não apenas calcule**: o comitê quer entender, não ver código
-4. **Teste de robustez**: seus resultados mudam se usar janela diferente?
-5. **Conecte as peças**: o GARCH alimenta a previsão de volatilidade, que alimenta a otimização
-:::
-
-## Apresentação Final
-
-Na sessão presencial de **13 de junho**, cada grupo apresentará em **10 minutos**:
-
-1. Quais ativos e por quê (2 min)
-2. O que a volatilidade revela (3 min)
-3. Otimização da carteira e análise surpreendente (3 min)
-4. Recomendação final ao comitê (2 min)
-
-Seguido de **5 minutos de perguntas** no formato *Tribunal Estatístico*.
-
-## Critérios narrativos
-
-Além dos critérios quantitativos acima, a avaliação leva em conta:
-
-- **Storytelling**: a apresentação conta uma história coerente?
-- **Visual e coerência** do texto/slides
-- **Incorporação dos ensinamentos das aulas** (conexão explícita com GARCH, CAPM, otimização)
-- **Seleção correta dos modelos** com justificativa técnica
-- **Qualidade dos códigos** (reprodutibilidade, organização, legibilidade)
-- **Profundidade das conclusões**
-
-## Referências e materiais de apoio
-
-Notebooks de referência da Profa. Paloma disponíveis em
-[Materiais Complementares](../complementar/index.qmd):
-
-- `aula04-volatilidade-arch-python.ipynb`: pipeline `arch` em Python
-- `aula04-volatilidade-garch-r.qmd`: GARCH, rugarch e SV em R
-- `aula05-capm-var-yfinance.ipynb`: CAPM e rolling betas
-- `aula06-otimizacao-markowitz.ipynb`: fronteira eficiente via `scipy.optimize`
