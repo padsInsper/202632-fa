@@ -55,8 +55,6 @@ website:
             href: labs/lab03-financeiras-r.qmd
           - text: "App: Monte sua Carteira (interativo)"
             href: labs/app-carteira.qmd
-          - text: "Dinâmica: escolha de ativos (perfil + consenso)"
-            href: labs/dinamica-escolha-ativos.qmd
           - text: "Aula 7: CAPM e Portfólios (13/jun)"
             href: aulas/aula07-portfolios.qmd
           - text: "Aula 8: Tópicos Avançados (13/jun)"
