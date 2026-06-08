@@ -138,11 +138,12 @@ def loterias_ui():
 NOTA_METODOLOGICA = """
 **Perfil de risco (λ).** As loterias são do tipo Holt-Laury: a cada decisão, a chance do
 prêmio alto cresce. O número de escolhas seguras é convertido num coeficiente de aversão a
-risco λ da utilidade média-variância
+risco λ da utilidade média-variância sobre o retorno excedente ao rf
 
-U = μ - (λ / 2) · σ²
+U = (μ - rf) - (λ / 2) · σ²
 
-onde μ é o retorno esperado e σ² a variância. λ alto penaliza mais o risco. Mapa usado: 0 a
+onde μ é o retorno esperado, rf a taxa livre de risco e σ² a variância. λ alto penaliza
+mais o risco. Mapa usado: 0 a
 1 escolhas seguras = Arrojado (λ = 2,5); 2 a 3 = Moderado (λ = 6); 4 a 6 = Conservador (λ =
 14). É uma calibração didática, não uma estimativa formal de aversão relativa (CRRA).
 
@@ -151,12 +152,14 @@ janela: retorno anual = média × 252; volatilidade anual = desvio padrão × �
 (retorno anual menos rf) / volatilidade, com rf = 10% a.a. A correlação é a de Pearson,
 calculada par a par (aproveitando todos os dias disponíveis de cada par).
 
-**Recomendação.** Cada ativo recebe a utilidade U calculada com o seu λ. Os ativos são
-ranqueados por U e selecionados por um procedimento guloso que, conforme a sua preferência
-de diversificação, penaliza correlação positiva (ativos pouco correlacionados) ou premia
-correlação negativa (hedge). O tamanho da carteira vem da sua resposta. Os ativos do
-exterior usam dias de pregão próprios, então entram quando têm histórico suficiente na
-janela.
+**Recomendação.** Primeiro filtramos os ativos que **batem a taxa livre de risco** no
+período (Sharpe positivo), para não sugerir um ativo de baixa volatilidade que rendeu menos
+que o rf só por ser pouco volátil. Cada ativo elegível recebe a utilidade U calculada com o
+seu λ. Os ativos são ranqueados por U e selecionados por um procedimento guloso que,
+conforme a sua preferência de diversificação, penaliza correlação positiva (ativos pouco
+correlacionados) ou premia correlação negativa (hedge). O tamanho da carteira vem da sua
+resposta. Os ativos do exterior usam dias de pregão próprios, então entram quando têm
+histórico suficiente na janela.
 
 **Referências.**
 
@@ -343,10 +346,18 @@ def server(input, output, session):
         da = dados()
         if len(m) < 2:
             return []
-        u = m["ret"] - 0.5 * r["lam"] * m["vol"] ** 2     # utilidade média-variância
+        N = min(r["N"], len(m))
+        # só considera ativos que batem a taxa livre de risco (Sharpe > 0);
+        # se faltar, relaxa para os de maior Sharpe. Evita recomendar ativos
+        # de baixa vol que renderam menos que o rf só por serem pouco voláteis.
+        pool = list(m.index[m["sharpe"] > 0])
+        if len(pool) < N:
+            pool = list(m["sharpe"].sort_values(ascending=False).head(max(N, 8)).index)
+        mm = m.loc[pool]
+        # utilidade média-variância sobre o retorno EXCEDENTE ao rf
+        u = (mm["ret"] - RF_ANUAL) - 0.5 * r["lam"] * mm["vol"] ** 2
         un = (u - u.min()) / (u.max() - u.min() + 1e-9)   # normaliza para 0..1
-        C = da.corr()                                     # correlação pairwise
-        N = min(r["N"], len(un))
+        C = da[pool].corr()                               # correlação pairwise (no pool)
 
         modo = r["correlacao"]
         if modo == "baixa":
