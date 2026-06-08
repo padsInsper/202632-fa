@@ -111,7 +111,7 @@ da_tsibble |>
 #| fig-height: 9
 #| fig-width: 8
 da_tsibble |>
-  autoplot(ret_closing_prices, colour = "black") +
+  autoplot(ret_adjusted_prices, colour = "black") +
   facet_wrap(~ticker, scales = "free_y", ncol = 1) +
   labs(x = NULL, y = "Log-retorno")
 ```
@@ -122,14 +122,14 @@ ACF e PACF dos retornos e dos retornos ao quadrado, mais a checagem de normalida
 
 ```{r}
 da_tsibble |>
-  ACF(ret_closing_prices) |>
+  ACF(ret_adjusted_prices) |>
   autoplot() +
   labs(title = "ACF dos retornos")
 ```
 
 ```{r}
 da_tsibble |>
-  dplyr::mutate(ret2 = ret_closing_prices^2) |>
+  dplyr::mutate(ret2 = ret_adjusted_prices^2) |>
   ACF(ret2) |>
   autoplot() +
   labs(title = "ACF dos retornos ao quadrado")
@@ -137,7 +137,7 @@ da_tsibble |>
 
 ```{r}
 da_tsibble |>
-  dplyr::mutate(ret2 = ret_closing_prices^2) |>
+  dplyr::mutate(ret2 = ret_adjusted_prices^2) |>
   PACF(ret2) |>
   autoplot() +
   labs(title = "PACF dos retornos ao quadrado")
@@ -156,7 +156,7 @@ da_tsibble |>
 #| fig-height: 5
 #| fig-width: 9
 da_train |>
-  ggplot(aes(x = ret_closing_prices)) +
+  ggplot(aes(x = ret_adjusted_prices)) +
   geom_histogram(bins = 90) +
   facet_wrap(~ticker, ncol = 2) +
   labs(x = "Log-retorno", y = NULL, title = "Distribuição dos retornos")
@@ -171,7 +171,7 @@ da_train |>
   group_by(ticker) |>
   summarise(
     gg = list(
-      ggplot(pick(everything()), aes(sample = ret_closing_prices)) +
+      ggplot(pick(everything()), aes(sample = ret_adjusted_prices)) +
         geom_qq() +
         geom_qq_line() +
         labs(title = cur_group()$ticker, x = NULL, y = NULL)
@@ -189,7 +189,7 @@ da_train |>
   group_by(ticker) |>
   summarise(
     gg = list(
-      ggplot(pick(everything()), aes(sample = ret_closing_prices)) +
+      ggplot(pick(everything()), aes(sample = ret_adjusted_prices)) +
         geom_qq(distribution = qt, dparams = list(df = 3)) +
         geom_qq_line(distribution = qt, dparams = list(df = 3)) +
         labs(title = cur_group()$ticker, x = NULL, y = NULL)
@@ -207,7 +207,9 @@ Função que ajusta um GARCH com a especificação do `rugarch`. A média é um 
 
 ```{r}
 garch_individual <- function(parms, ret, prog = NULL) {
-  if (!is.null(prog)) prog()
+  if (!is.null(prog)) {
+    prog()
+  }
   garch_model <- ugarchspec(
     variance.model = list(
       model = "fGARCH",
@@ -234,11 +236,12 @@ garch_individual <- function(parms, ret, prog = NULL) {
 Testando para um ativo:
 
 ```{r}
+library(rugarch)
 fit_exemplo <- garch_individual(
   parms = list(p = 0, q = 0, m = 1, n = 1, dist = "std"),
   ret = da_train |>
     dplyr::filter(ticker == "HGRE11.SA") |>
-    pull(ret_closing_prices)
+    pull(ret_adjusted_prices)
 )
 fit_exemplo
 ```
@@ -251,24 +254,37 @@ referência.
 
 ```{r}
 melhor_garch <- function(ativo, prog = NULL) {
-  if (!is.null(prog)) prog()
+  if (!is.null(prog)) {
+    prog()
+  }
   ret <- da_train |>
     dplyr::filter(ticker == ativo) |>
-    dplyr::pull(ret_closing_prices)
+    dplyr::pull(ret_adjusted_prices)
 
   grid <- tidyr::expand_grid(
-    p = 0, q = 0,                 # média (ARMA) simples
-    m = 1:2, n = 1:2,             # ordem do GARCH
-    dist = c("norm", "std")       # normal e t de Student
+    p = 0,
+    q = 0, # média (ARMA) simples
+    m = 1:2,
+    n = 1:2, # ordem do GARCH
+    dist = c("norm", "std") # normal e t de Student
   )
 
   purrr::pmap(grid, function(p, q, m, n, dist) {
     parms <- list(p = p, q = q, m = m, n = n, dist = dist)
     fit <- garch_individual(parms, ret)
     ic <- tryCatch(rugarch::infocriteria(fit), error = function(e) NULL)
-    if (is.null(ic)) return(NULL)
-    tibble::tibble(p = p, q = q, m = m, n = n, dist = dist,
-                   aic = ic["Akaike", 1], bic = ic["Bayes", 1])
+    if (is.null(ic)) {
+      return(NULL)
+    }
+    tibble::tibble(
+      p = p,
+      q = q,
+      m = m,
+      n = n,
+      dist = dist,
+      aic = ic["Akaike", 1],
+      bic = ic["Bayes", 1]
+    )
   }) |>
     dplyr::bind_rows() |>
     dplyr::arrange(aic)
@@ -299,11 +315,12 @@ frente. Guardamos o `shape` (graus de liberdade da t) para reusar no VaR.
 prever_volatilidade <- function(parms, n_steps = 5) {
   ret <- da_train |>
     dplyr::filter(ticker == parms$ticker) |>
-    pull(ret_closing_prices)
+    pull(ret_adjusted_prices)
 
   garch_model <- ugarchspec(
     variance.model = list(
-      model = "fGARCH", submodel = "GARCH",
+      model = "fGARCH",
+      submodel = "GARCH",
       garchOrder = c(parms$m, parms$n)
     ),
     mean.model = list(armaOrder = c(parms$p, parms$q), include.mean = TRUE),
@@ -312,7 +329,11 @@ prever_volatilidade <- function(parms, n_steps = 5) {
 
   fit <- ugarchfit(garch_model, data = ret, out.sample = n_steps - 1)
 
-  shape <- if (parms$dist == "std") as.numeric(fit@fit$coef["shape"]) else NA_real_
+  shape <- if (parms$dist == "std") {
+    as.numeric(fit@fit$coef["shape"])
+  } else {
+    NA_real_
+  }
   forecasts <- ugarchforecast(fit, n.ahead = n_steps)@forecast
 
   tibble::tibble(
@@ -342,7 +363,7 @@ aleatórias.
 
 ```{r}
 da_wide <- da_train |>
-  dplyr::select(ref_date, name = ticker, value = ret_closing_prices) |>
+  dplyr::select(ref_date, name = ticker, value = ret_adjusted_prices) |>
   tidyr::pivot_wider()
 
 da_xts <- da_wide |>
@@ -365,10 +386,15 @@ port_risk <- sqrt(t(wts) %*% (cov_mat %*% wts))
 sharpe_ratio <- port_returns / port_risk
 
 tibble::tibble(
-  ativo = ativos, peso = round(wts, 3)
+  ativo = ativos,
+  peso = round(wts, 3)
 )
-c(retorno = port_returns, risco = as.numeric(port_risk),
-  sharpe = as.numeric(sharpe_ratio)) |> round(5)
+c(
+  retorno = port_returns,
+  risco = as.numeric(port_risk),
+  sharpe = as.numeric(sharpe_ratio)
+) |>
+  round(5)
 ```
 
 Agora 5000 carteiras aleatórias. As de menor risco e maior Sharpe são a mínima variância
@@ -376,7 +402,7 @@ e a carteira de tangência.
 
 ```{r}
 sim_returns <- function(i) {
-  wts <- runif(length(ativos))
+  wts <- rgamma(length(ativos), 1)
   wts <- wts / sum(wts)
   port_ret <- sum(wts * mean_ret)
   port_sd <- as.numeric(sqrt(t(wts) %*% (cov_mat %*% wts)))
@@ -385,7 +411,11 @@ sim_returns <- function(i) {
     purrr::set_names(ativos) |>
     tibble::enframe() |>
     tidyr::pivot_wider() |>
-    dplyr::mutate(return = port_ret, risk = port_sd, sharpe = port_ret / port_sd)
+    dplyr::mutate(
+      return = port_ret,
+      risk = port_sd,
+      sharpe = port_ret / port_sd
+    )
 }
 
 portfolio_values <- purrr::map(1:5000, sim_returns) |>
@@ -422,10 +452,23 @@ portfolio_values |>
   scale_color_viridis_c() +
   scale_y_continuous(labels = scales::percent) +
   scale_x_continuous(labels = scales::percent) +
-  labs(x = "Risco", y = "Retorno",
-       title = "Fronteira eficiente por Monte Carlo (5000 carteiras)") +
-  geom_point(aes(x = risk, y = return), data = min_var, color = "#3ACC9F", size = 3) +
-  geom_point(aes(x = risk, y = return), data = max_sr, color = "#E50505", size = 3)
+  labs(
+    x = "Risco",
+    y = "Retorno",
+    title = "Fronteira eficiente por Monte Carlo (5000 carteiras)"
+  ) +
+  geom_point(
+    aes(x = risk, y = return),
+    data = min_var,
+    color = "#3ACC9F",
+    size = 3
+  ) +
+  geom_point(
+    aes(x = risk, y = return),
+    data = max_sr,
+    color = "#E50505",
+    size = 3
+  )
 ```
 
 ## Parte 5: VaR do portfólio
@@ -476,18 +519,23 @@ market_returns <- yfR::yf_get(
   freq_data = "daily",
   do_complete_data = TRUE
 ) |>
-  dplyr::select(ref_date, ibov = ret_closing_prices)
+  dplyr::select(ref_date, ibov = ret_adjusted_prices)
 
 # retornos da carteira = soma ponderada por data (sem tidyquant)
 port_wide <- da_train |>
-  dplyr::select(ref_date, ticker, ret = ret_closing_prices) |>
+  dplyr::select(ref_date, ticker, ret = ret_adjusted_prices) |>
   tidyr::pivot_wider(names_from = ticker, values_from = ret) |>
   tidyr::drop_na()
 
-port_wide$portfolio <- as.numeric(as.matrix(port_wide[, ativos]) %*% pesos_finais)
+port_wide$portfolio <- as.numeric(
+  as.matrix(port_wide[, ativos]) %*% pesos_finais
+)
 
 all_returns <- market_returns |>
-  dplyr::inner_join(dplyr::select(port_wide, ref_date, portfolio), "ref_date") |>
+  dplyr::inner_join(
+    dplyr::select(port_wide, ref_date, portfolio),
+    "ref_date"
+  ) |>
   tidyr::drop_na()
 
 beta_geral <- with(all_returns, cov(portfolio, ibov) / var(ibov))
@@ -497,14 +545,15 @@ calcular_beta <- function(ativo) {
     dplyr::filter(ticker == ativo) |>
     dplyr::inner_join(market_returns, "ref_date") |>
     tidyr::drop_na() |>
-    with(cov(ret_closing_prices, ibov) / var(ibov))
+    with(cov(ret_adjusted_prices, ibov) / var(ibov))
 }
 
 betas <- purrr::map_dbl(ativos, calcular_beta) |>
   purrr::set_names(ativos)
 
 round(betas, 3)
-c(beta_ponderado = sum(betas * pesos_finais), beta_regressao = beta_geral) |> round(3)
+c(beta_ponderado = sum(betas * pesos_finais), beta_regressao = beta_geral) |>
+  round(3)
 ```
 
 ```{r}
