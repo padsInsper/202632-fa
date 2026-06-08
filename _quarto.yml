@@ -61,8 +61,6 @@ website:
             href: aulas/aula07-portfolios.qmd
           - text: "Aula 8: Tópicos Avançados (13/jun)"
             href: aulas/aula08-avancados.qmd
-          - text: "Lab 4: Projeto Final — Office Hours (15/jun)"
-            href: labs/lab04-projeto.qmd
           - text: "---"
           - text: "Trabalho Final"
             href: trabalhos/final.qmd
